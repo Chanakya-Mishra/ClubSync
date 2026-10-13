@@ -269,6 +269,16 @@ function applyRoleVisibility() {
 
   // 1. Admin Command Center Tab: Only visible to Admin, Campus Manager, Advisor
   document.getElementById('tab-btn-admin')?.classList.toggle('hidden', !isAdminMgrOrAdvisor);
+  const tabAdminLabel = document.getElementById('tab-admin-label');
+  if (tabAdminLabel) {
+    if (role === 'CAMPUS_MGR') {
+      tabAdminLabel.textContent = 'Campus Approvals & Management';
+    } else if (role === 'ADVISOR') {
+      tabAdminLabel.textContent = 'Advisor Center';
+    } else {
+      tabAdminLabel.textContent = 'Admin Command Center';
+    }
+  }
 
   // 2. Stretch Tab Label & Budget Section: Hide Budgets from regular Students
   const stretchBtn = document.getElementById('tab-btn-stretch');
@@ -498,6 +508,46 @@ async function loadDashboard() {
       .slice(0, 8)
       .map((s) => `<div class="p-2.5 rounded-lg bg-slate-100 text-slate-700">Student <strong>${s.full_name}</strong> (${s.campus_code}): 0 sessions & 0 events</div>`);
     alertsEl.innerHTML = [...inactiveHtml, ...zeroHtml].join('') || `<p class="text-slate-400">No inactive clubs or zero-participation alerts.</p>`;
+  }
+
+  // Pending Student Account Requests (Fast approval directly from Dashboard for Campus Manager / Admin)
+  const banner = document.getElementById('dash-pending-students-banner');
+  const countEl = document.getElementById('dash-pending-count');
+  const listEl = document.getElementById('dash-pending-students-list');
+  if (banner && (currentUser.role === 'CAMPUS_MGR' || currentUser.role === 'ADMIN')) {
+    try {
+      const queue = await apiFetch('/api/admin/pending-queue');
+      const pendingStudents = queue.pending_accounts || [];
+      if (pendingStudents.length > 0) {
+        if (countEl) countEl.textContent = pendingStudents.length;
+        if (listEl) {
+          listEl.innerHTML = pendingStudents.map((u) => `
+            <div class="p-3 rounded-xl bg-white/80 border border-amber-200/80 shadow-sm flex items-center justify-between gap-2">
+              <div class="truncate">
+                <div class="font-bold text-slate-900 text-xs truncate">${u.full_name}</div>
+                <div class="text-[11px] text-slate-500 truncate">${u.email}</div>
+                <div class="text-[10px] text-amber-700 font-semibold">${u.campus_code} • ${u.roll_number || 'No Roll #'}</div>
+              </div>
+              <div class="flex gap-1 shrink-0">
+                <button onclick="decideUserAccount('${u.id}', 'APPROVED')" class="px-2.5 py-1 rounded-lg btn-gradient-emerald text-white text-[11px] font-bold">
+                  Permit
+                </button>
+                <button onclick="decideUserAccount('${u.id}', 'REJECTED')" class="px-2 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-semibold">
+                  Decline
+                </button>
+              </div>
+            </div>
+          `).join('');
+        }
+        banner.classList.remove('hidden');
+      } else {
+        banner.classList.add('hidden');
+      }
+    } catch (_) {
+      banner.classList.add('hidden');
+    }
+  } else if (banner) {
+    banner.classList.add('hidden');
   }
 }
 
@@ -1899,8 +1949,15 @@ async function decideUserAccount(userId, accountStatus) {
         ? `Permitted account for ${updated.full_name}`
         : `Revoked/declined account for ${updated.full_name}`
     );
-    loadAdminCenter();
-  } catch (err) {
+    await refreshPendingBadge();
+    const adminTab = document.getElementById('tab-admin');
+    if (adminTab && !adminTab.classList.contains('hidden')) {
+      await loadAdminCenter();
+    }
+    const dashTab = document.getElementById('tab-dashboard');
+    if (dashTab && !dashTab.classList.contains('hidden')) {
+      await loadDashboard();
+    }
     showToast(err.message, true);
   }
 }

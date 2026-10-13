@@ -51,5 +51,32 @@ def seed_database(db: Session) -> dict:
         ]
         db.add_all(configs)
 
+    # Ensure official Campus Manager account exists with password 'sundaram'
+    from .models import User
+    from .database import hash_password
+    mgr_email = "sundaram.mishra@msot.org"
+    hi_tech = db.query(Campus).filter(Campus.code == "HI-Tech").first()
+    existing_mgr = db.query(User).filter(User.email == mgr_email).first()
+    if not existing_mgr:
+        db.add(
+            User(
+                email=mgr_email,
+                password_hash=hash_password("sundaram"),
+                full_name="Sundaram Mishra",
+                role="CAMPUS_MGR",
+                account_status="APPROVED",
+                campus_id=hi_tech.id if hi_tech else None,
+                roll_number="MSOT-CM-01",
+                batch="Staff",
+                track="Administration",
+            )
+        )
+    else:
+        existing_mgr.password_hash = hash_password("sundaram")
+        existing_mgr.role = "CAMPUS_MGR"
+        existing_mgr.account_status = "APPROVED"
+        if not existing_mgr.campus_id and hi_tech:
+            existing_mgr.campus_id = hi_tech.id
+
     db.commit()
     return {"initialized": True}

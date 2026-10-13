@@ -7,6 +7,10 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import sessionmaker, declarative_base
 
+import hashlib
+import secrets
+import hmac
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
@@ -150,3 +154,17 @@ def upload_to_supabase_storage(filepath: str, dest_path: str, content_type: str 
     except Exception:
         return None
     return None
+
+
+def hash_password(password: str, salt: Optional[str] = None) -> str:
+    s = salt or secrets.token_hex(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), s.encode("utf-8"), 100_000)
+    return f"{s}${dk.hex()}"
+
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    if not stored_hash or "$" not in stored_hash:
+        return False
+    salt, _ = stored_hash.split("$", 1)
+    return hmac.compare_digest(hash_password(password, salt), stored_hash)
+
