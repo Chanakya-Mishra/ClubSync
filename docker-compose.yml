@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  app:
+    build: .
+    container_name: msot-club-tracker
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.example
+    environment:
+      - SUPABASE_DB_URL=${SUPABASE_DB_URL:-}
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

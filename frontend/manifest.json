@@ -1,0 +1,9 @@
+{
+  "name": "MSOT Club Activities Tracker",
+  "short_name": "MSOT Clubs",
+  "description": "Verified Club Day, QR Check-in, Rubric Evaluation, Events & Co-Curricular Transcript Platform for MSOT",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1e40af"
+}
