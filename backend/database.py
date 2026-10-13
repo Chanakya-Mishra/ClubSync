@@ -27,14 +27,17 @@ from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
 # Database URL priority: SUPABASE_DB_URL -> DATABASE_URL -> POSTGRES_URL_NON_POOLING -> POSTGRES_URL -> Local SQLite fallback
 DEFAULT_SQLITE_URL = f"sqlite:///{os.path.join(DATA_DIR, 'msot_club_tracker.db')}"
-RAW_DB_URL = (
-    os.environ.get("SUPABASE_DB_URL", "").strip()
-    or os.environ.get("DATABASE_URL", "").strip()
-    or os.environ.get("POSTGRES_URL_NON_POOLING", "").strip()
-    or os.environ.get("POSTGRES_URL", "").strip()
-    or os.environ.get("POSTGRES_PRISMA_URL", "").strip()
-    or DEFAULT_SQLITE_URL
-)
+
+
+def _get_valid_env_db_url() -> str:
+    for key in ("SUPABASE_DB_URL", "DATABASE_URL", "POSTGRES_URL_NON_POOLING", "POSTGRES_URL", "POSTGRES_PRISMA_URL"):
+        val = os.environ.get(key, "").strip()
+        if val and "[PASSWORD]" not in val and "[PROJECT-REF]" not in val and "YOUR_PASSWORD" not in val:
+            return val
+    return DEFAULT_SQLITE_URL
+
+
+RAW_DB_URL = _get_valid_env_db_url()
 
 
 def _clean_postgres_url(url: str) -> str:
