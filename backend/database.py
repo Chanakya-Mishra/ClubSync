@@ -23,23 +23,40 @@ SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "").strip()
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 SUPABASE_STORAGE_BUCKET = os.environ.get("SUPABASE_STORAGE_BUCKET", "club-tracker-assets").strip()
 
-# Database URL priority: SUPABASE_DB_URL -> DATABASE_URL -> Local SQLite fallback
+from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+
+# Database URL priority: SUPABASE_DB_URL -> DATABASE_URL -> POSTGRES_URL_NON_POOLING -> POSTGRES_URL -> Local SQLite fallback
 DEFAULT_SQLITE_URL = f"sqlite:///{os.path.join(DATA_DIR, 'msot_club_tracker.db')}"
 RAW_DB_URL = (
     os.environ.get("SUPABASE_DB_URL", "").strip()
     or os.environ.get("DATABASE_URL", "").strip()
+    or os.environ.get("POSTGRES_URL_NON_POOLING", "").strip()
+    or os.environ.get("POSTGRES_URL", "").strip()
+    or os.environ.get("POSTGRES_PRISMA_URL", "").strip()
     or DEFAULT_SQLITE_URL
 )
 
-# Normalize postgres:// to postgresql+psycopg2:// for SQLAlchemy 2.0
-if RAW_DB_URL.startswith("postgres://"):
-    DATABASE_URL = RAW_DB_URL.replace("postgres://", "postgresql+psycopg2://", 1)
-elif RAW_DB_URL.startswith("postgresql://"):
-    DATABASE_URL = RAW_DB_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
-else:
-    DATABASE_URL = RAW_DB_URL
 
+def _clean_postgres_url(url: str) -> str:
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    if url.startswith("postgresql"):
+        parsed = urlparse(url)
+        # Strip pgbouncer / supa params injected by Vercel integrations that psycopg2 rejects
+        allowed_q = [
+            (k, v)
+            for k, v in parse_qsl(parsed.query)
+            if k.lower() not in ("pgbouncer", "supa", "schema", "connection_limit", "pool_timeout")
+        ]
+        url = urlunparse(parsed._replace(query=urlencode(allowed_q)))
+    return url
+
+
+DATABASE_URL = _clean_postgres_url(RAW_DB_URL)
 IS_SUPABASE_POSTGRES = DATABASE_URL.startswith("postgresql")
+IS_EPHEMERAL_VERCEL_SQLITE = bool(os.environ.get("VERCEL")) and not IS_SUPABASE_POSTGRES
 
 if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(
@@ -59,14 +76,21 @@ if DATABASE_URL.startswith("sqlite"):
         cursor.execute("PRAGMA foreign_keys=ON;")
         cursor.close()
 else:
-    # Supabase PostgreSQL connection pool (Transaction / Session pooler compatible)
-    engine = create_engine(
-        DATABASE_URL,
-        pool_size=20,
-        max_overflow=40,
-        pool_pre_ping=True,
-        connect_args={"sslmode": os.environ.get("PGSSLMODE", "require")},
-    )
+    # Supabase PostgreSQL connection pool (NullPool on Vercel Serverless to prevent dropped connections)
+    if os.environ.get("VERCEL"):
+        engine = create_engine(
+            DATABASE_URL,
+            poolclass=NullPool,
+            connect_args={"sslmode": os.environ.get("PGSSLMODE", "require")},
+        )
+    else:
+        engine = create_engine(
+            DATABASE_URL,
+            pool_size=20,
+            max_overflow=40,
+            pool_pre_ping=True,
+            connect_args={"sslmode": os.environ.get("PGSSLMODE", "require")},
+        )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -82,8 +106,17 @@ def get_db():
 
 def get_database_info() -> Dict[str, Any]:
     return {
-        "provider": "Supabase PostgreSQL" if IS_SUPABASE_POSTGRES else "Supabase-Compatible Local Engine (SQLite WAL)",
+        "provider": (
+            "Supabase PostgreSQL"
+            if IS_SUPABASE_POSTGRES
+            else (
+                "Ephemeral /tmp SQLite (Connect Supabase/Postgres on Vercel to persist data!)"
+                if IS_EPHEMERAL_VERCEL_SQLITE
+                else "Local SQLite Engine (data/msot_club_tracker.db)"
+            )
+        ),
         "is_supabase_postgres": IS_SUPABASE_POSTGRES,
+        "is_ephemeral_vercel_sqlite": IS_EPHEMERAL_VERCEL_SQLITE,
         "supabase_url_configured": bool(SUPABASE_URL),
         "supabase_storage_bucket": SUPABASE_STORAGE_BUCKET,
         "schema_sql_path": "supabase/schema.sql",

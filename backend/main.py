@@ -106,30 +106,68 @@ def verify_password(password: str, stored_hash: str) -> bool:
     return hmac.compare_digest(hash_password(password, salt), stored_hash)
 
 
-def create_access_token(user_id: str) -> str:
+import json as _json
+
+
+def create_access_token(user_or_id: Any) -> str:
     exp = int(time.time()) + 86400 * 7
-    payload = f"{user_id}:{exp}"
-    sig = hmac.new(AUTH_SECRET.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
-    raw = f"{payload}:{sig}".encode("utf-8")
-    return base64.urlsafe_b64encode(raw).decode("ascii")
+    if isinstance(user_or_id, str):
+        claims = {"uid": user_or_id, "exp": exp}
+    else:
+        u = user_or_id
+        claims = {
+            "uid": u.id,
+            "exp": exp,
+            "email": u.email,
+            "full_name": u.full_name,
+            "role": u.role,
+            "account_status": getattr(u, "account_status", "APPROVED") or "APPROVED",
+            "campus_id": u.campus_id,
+            "roll_number": u.roll_number,
+            "batch": u.batch,
+            "track": u.track,
+            "password_hash": u.password_hash,
+        }
+    payload_b64 = base64.urlsafe_b64encode(_json.dumps(claims, separators=(",", ":")).encode("utf-8")).decode("ascii")
+    sig = hmac.new(AUTH_SECRET.encode("utf-8"), payload_b64.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{payload_b64}.{sig}"
+
+
+def decode_access_token_claims(token: str) -> Optional[Dict[str, Any]]:
+    try:
+        if "." in token:
+            payload_b64, sig = token.split(".", 1)
+            expected_sig = hmac.new(
+                AUTH_SECRET.encode("utf-8"),
+                payload_b64.encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+            if not hmac.compare_digest(sig, expected_sig):
+                return None
+            claims = _json.loads(base64.urlsafe_b64decode(payload_b64.encode("ascii")).decode("utf-8"))
+            if int(claims.get("exp", 0)) < int(time.time()):
+                return None
+            return claims
+        else:
+            decoded = base64.urlsafe_b64decode(token.encode("ascii")).decode("utf-8")
+            user_id, exp_str, sig = decoded.split(":", 2)
+            if int(exp_str) < int(time.time()):
+                return None
+            expected_sig = hmac.new(
+                AUTH_SECRET.encode("utf-8"),
+                f"{user_id}:{exp_str}".encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+            if not hmac.compare_digest(sig, expected_sig):
+                return None
+            return {"uid": user_id, "exp": int(exp_str)}
+    except Exception:
+        return None
 
 
 def decode_access_token(token: str) -> Optional[str]:
-    try:
-        decoded = base64.urlsafe_b64decode(token.encode("ascii")).decode("utf-8")
-        user_id, exp_str, sig = decoded.split(":", 2)
-        if int(exp_str) < int(time.time()):
-            return None
-        expected_sig = hmac.new(
-            AUTH_SECRET.encode("utf-8"),
-            f"{user_id}:{exp_str}".encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()
-        if not hmac.compare_digest(sig, expected_sig):
-            return None
-        return user_id
-    except Exception:
-        return None
+    claims = decode_access_token_claims(token)
+    return claims.get("uid") if claims else None
 
 
 def get_current_user(
@@ -138,9 +176,12 @@ def get_current_user(
     db: Session = Depends(get_db),
 ) -> User:
     user_id = None
+    claims = None
     if authorization and authorization.startswith("Bearer "):
         token = authorization.replace("Bearer ", "", 1).strip()
-        user_id = decode_access_token(token)
+        claims = decode_access_token_claims(token)
+        if claims:
+            user_id = claims.get("uid")
     if not user_id and x_user_id:
         user_id = x_user_id
 
@@ -148,6 +189,32 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="Authentication required. Please log in.")
 
     user = db.query(User).filter(User.id == user_id).first()
+    if not user and claims and claims.get("email"):
+        # Auto-rehydrate verified user if hitting a fresh serverless container with ephemeral SQLite
+        existing_by_email = db.query(User).filter(User.email == claims["email"]).first()
+        if existing_by_email:
+            user = existing_by_email
+        else:
+            user = User(
+                id=claims["uid"],
+                email=claims["email"],
+                full_name=claims.get("full_name", "User"),
+                role=claims.get("role", "STUDENT"),
+                account_status=claims.get("account_status", "APPROVED"),
+                campus_id=claims.get("campus_id"),
+                roll_number=claims.get("roll_number"),
+                batch=claims.get("batch", "2025-2029 B.Tech"),
+                track=claims.get("track", "Mirai Track"),
+                password_hash=claims.get("password_hash"),
+            )
+            db.add(user)
+            try:
+                db.commit()
+                db.refresh(user)
+            except Exception:
+                db.rollback()
+                user = db.query(User).filter(User.email == claims["email"]).first()
+
     if not user:
         raise HTTPException(status_code=401, detail="User session not found. Please log in again.")
     if getattr(user, "account_status", "APPROVED") != "APPROVED":
@@ -447,7 +514,7 @@ def register_user(req: RegisterRequest, db: Session = Depends(get_db)):
             "message": "Your student account request has been submitted! You can sign in once the Admin permits your account.",
         }
 
-    token = create_access_token(user.id)
+    token = create_access_token(user)
     return {
         "pending_approval": False,
         "token": token,
@@ -475,7 +542,7 @@ def login_user(req: LoginRequest, db: Session = Depends(get_db)):
         )
 
     campuses_map = {c.id: c.code for c in db.query(Campus).all()}
-    token = create_access_token(user.id)
+    token = create_access_token(user)
     return {
         "token": token,
         "user": serialize_user(user, campuses_map),
