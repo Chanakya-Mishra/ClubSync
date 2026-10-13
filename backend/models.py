@@ -354,7 +354,21 @@ class MediaGalleryItem(Base):
     media_url = Column(String(350), nullable=False)
     tagged_student_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     student_consent = Column(Boolean, default=True)  # Consent control: student can opt-in/revoke visibility
+# Club News / Announcements posted by Club Presidents and Campus Managers
+class ClubNews(Base):
+    __tablename__ = "club_news"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    club_id = Column(String(36), ForeignKey("clubs.id"), nullable=False, index=True)
+    author_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    title = Column(String(200), nullable=False)
+    content = Column(Text, nullable=False)
+    pinned = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    club = relationship("Club", foreign_keys=[club_id])
+    author = relationship("User", foreign_keys=[author_id])
 
 
 class AuditLog(Base):

@@ -35,6 +35,7 @@ from .models import (
     BudgetRequest,
     DutyLeaveRequest,
     MediaGalleryItem,
+    ClubNews,
     AuditLog,
 )
 from .services.qr_engine import (
@@ -239,13 +240,13 @@ def verify_coordinator_club_access(db: Session, user: User, club_id: str):
         if club and (not club.advisor_id or club.advisor_id == user.id):
             return
         raise HTTPException(status_code=403, detail="Faculty Advisor can only manage their assigned club.")
-    if user.role == "COORDINATOR":
+    if user.role in ("COORDINATOR", "PRESIDENT"):
         coord_mem = (
             db.query(ClubMembership)
             .filter(
                 ClubMembership.club_id == club_id,
                 ClubMembership.student_id == user.id,
-                ClubMembership.tier == "COORDINATOR",
+                ClubMembership.tier.in_(["COORDINATOR", "PRESIDENT"]),
                 ClubMembership.status == "APPROVED",
             )
             .first()
@@ -253,7 +254,7 @@ def verify_coordinator_club_access(db: Session, user: User, club_id: str):
         if not coord_mem:
             raise HTTPException(
                 status_code=403,
-                detail="Student Coordinators can only manage their own assigned club.",
+                detail="Club Presidents / Coordinators can only manage their own assigned club.",
             )
         return
     raise HTTPException(status_code=403, detail=f"Role '{user.role}' is not permitted to perform this action.")
@@ -435,6 +436,13 @@ class ConsentToggleRequest(BaseModel):
     student_consent: bool
 
 
+class ClubNewsCreateRequest(BaseModel):
+    club_id: str
+    title: str
+    content: str
+    pinned: bool = False
+
+
 # ============================================================================
 # Authentication & User Management Endpoints
 # ============================================================================
@@ -474,8 +482,8 @@ def register_user(req: RegisterRequest, db: Session = Depends(get_db)):
     campus_id = req.campus_id or (default_campus.id if default_campus else None)
 
     role_upper = req.role.upper()
-    # Student self-registration creates a PENDING_APPROVAL account that requires Admin permission
-    initial_account_status = "PENDING_APPROVAL" if role_upper == "STUDENT" else "APPROVED"
+    # Student and President self-registration creates a PENDING_APPROVAL account requiring Campus Mgr / Admin approval
+    initial_account_status = "PENDING_APPROVAL" if role_upper in ("STUDENT", "PRESIDENT", "COORDINATOR") else "APPROVED"
 
     user = User(
         email=email_clean,
@@ -667,9 +675,9 @@ def list_clubs(
         approved_count = sum(1 for m in memberships if m.status == "APPROVED")
         pending_count = sum(1 for m in memberships if m.status == "PENDING")
         coordinators = [
-            {"id": m.student_id, "name": users_map.get(m.student_id, "Coordinator")}
+            {"id": m.student_id, "name": users_map.get(m.student_id, "President")}
             for m in memberships
-            if m.tier == "COORDINATOR" and m.status == "APPROVED"
+            if m.tier in ("COORDINATOR", "PRESIDENT") and m.status == "APPROVED"
         ]
         my_membership = next((m for m in memberships if m.student_id == current_user.id), None)
 
@@ -773,18 +781,20 @@ def update_club_status(
 def assign_club_coordinator(
     club_id: str,
     student_id: str = Query(...),
+    tier: str = Query(default="PRESIDENT"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if current_user.role not in ("ADMIN", "CAMPUS_MGR", "ADVISOR"):
-        raise HTTPException(status_code=403, detail="Only Admin, Campus Manager, or Advisor can assign coordinators.")
+        raise HTTPException(status_code=403, detail="Only Admin, Campus Manager, or Advisor can assign club leadership.")
+    assign_tier = "PRESIDENT" if tier.upper() in ("PRESIDENT", "COORDINATOR") else tier.upper()
     existing = (
         db.query(ClubMembership)
         .filter(ClubMembership.club_id == club_id, ClubMembership.student_id == student_id)
         .first()
     )
     if existing:
-        existing.tier = "COORDINATOR"
+        existing.tier = assign_tier
         existing.status = "APPROVED"
         existing.approved_by_id = current_user.id
     else:
@@ -792,16 +802,16 @@ def assign_club_coordinator(
             ClubMembership(
                 club_id=club_id,
                 student_id=student_id,
-                tier="COORDINATOR",
+                tier=assign_tier,
                 status="APPROVED",
                 approved_by_id=current_user.id,
             )
         )
     user_obj = db.query(User).filter(User.id == student_id).first()
-    if user_obj and user_obj.role == "STUDENT":
-        user_obj.role = "COORDINATOR"
+    if user_obj and user_obj.role in ("STUDENT", "COORDINATOR"):
+        user_obj.role = "PRESIDENT"
     db.commit()
-    return {"message": "Coordinator assigned to club."}
+    return {"message": f"Club President assigned successfully."}
 
 
 @app.post("/api/clubs/{club_id}/enrol")
@@ -2623,6 +2633,170 @@ def update_photo_consent(
     }
 
 
+# ============================================================================
+# Club News & Announcements (Scoped by Membership; Authored by Presidents & CM)
+# ============================================================================
+
+@app.get("/api/club-news")
+def list_club_news(
+    club_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Returns club news.
+    - If user is a STUDENT: Only sees news from clubs they are an APPROVED member of.
+    - If user is a PRESIDENT or COORDINATOR: Sees news from their assigned club.
+    - If user is a CAMPUS_MGR or ADMIN or ADVISOR: Can see news across their campus / all clubs.
+    """
+    q = db.query(ClubNews)
+    if club_id:
+        q = q.filter(ClubNews.club_id == club_id)
+
+    # Student scoping: restricted strictly to approved club memberships
+    if current_user.role == "STUDENT":
+        approved_club_ids = [
+            m.club_id
+            for m in db.query(ClubMembership)
+            .filter(ClubMembership.student_id == current_user.id, ClubMembership.status == "APPROVED")
+            .all()
+        ]
+        q = q.filter(ClubNews.club_id.in_(approved_club_ids))
+    elif current_user.role in ("PRESIDENT", "COORDINATOR"):
+        # Sees news for their own assigned club
+        pres_club_ids = [
+            m.club_id
+            for m in db.query(ClubMembership)
+            .filter(
+                ClubMembership.student_id == current_user.id,
+                ClubMembership.tier.in_(["PRESIDENT", "COORDINATOR"]),
+                ClubMembership.status == "APPROVED",
+            )
+            .all()
+        ]
+        if pres_club_ids:
+            q = q.filter(ClubNews.club_id.in_(pres_club_ids))
+    elif current_user.role == "CAMPUS_MGR" and current_user.campus_id:
+        campus_club_ids = [c.id for c in db.query(Club).filter(Club.campus_id == current_user.campus_id).all()]
+        q = q.filter(ClubNews.club_id.in_(campus_club_ids))
+
+    news_items = q.order_by(ClubNews.pinned.desc(), ClubNews.created_at.desc()).all()
+    clubs_map = {c.id: c for c in db.query(Club).all()}
+    users_map = {u.id: u.full_name for u in db.query(User).all()}
+
+    return [
+        {
+            "id": n.id,
+            "club_id": n.club_id,
+            "club_name": clubs_map[n.club_id].name if n.club_id in clubs_map else "",
+            "club_code": clubs_map[n.club_id].code if n.club_id in clubs_map else "",
+            "title": n.title,
+            "content": n.content,
+            "pinned": n.pinned,
+            "author_id": n.author_id,
+            "author_name": users_map.get(n.author_id, "Club President"),
+            "created_at": n.created_at.isoformat() if n.created_at else None,
+        }
+        for n in news_items
+    ]
+
+
+@app.post("/api/club-news")
+def create_club_news(
+    req: ClubNewsCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Creates an official club news announcement.
+    Allowed for:
+    - Club President / Coordinator of this club
+    - Campus Manager
+    - System Admin
+    - Faculty Advisor assigned to this club
+    """
+    club = db.query(Club).filter(Club.id == req.club_id).first()
+    if not club:
+        raise HTTPException(status_code=404, detail="Club not found")
+
+    # Permission check
+    can_post = False
+    if current_user.role == "ADMIN":
+        can_post = True
+    elif current_user.role == "CAMPUS_MGR":
+        if not current_user.campus_id or club.campus_id == current_user.campus_id:
+            can_post = True
+    elif current_user.role == "ADVISOR":
+        if club.advisor_id == current_user.id:
+            can_post = True
+    elif current_user.role in ("PRESIDENT", "COORDINATOR"):
+        coord_mem = (
+            db.query(ClubMembership)
+            .filter(
+                ClubMembership.club_id == req.club_id,
+                ClubMembership.student_id == current_user.id,
+                ClubMembership.tier.in_(["PRESIDENT", "COORDINATOR"]),
+                ClubMembership.status == "APPROVED",
+            )
+            .first()
+        )
+        if coord_mem:
+            can_post = True
+
+    if not can_post:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the Club President, Campus Manager, or assigned Advisor can post news for this club.",
+        )
+
+    news = ClubNews(
+        club_id=req.club_id,
+        author_id=current_user.id,
+        title=req.title.strip(),
+        content=req.content.strip(),
+        pinned=req.pinned,
+    )
+    db.add(news)
+    db.add(
+        AuditLog(
+            actor_id=current_user.id,
+            action="CLUB_NEWS_POSTED",
+            entity_type="CLUB_NEWS",
+            entity_id=news.id,
+            details=f"Posted news '{news.title}' for club {club.name} ({club.code})",
+        )
+    )
+    db.commit()
+    db.refresh(news)
+    return {
+        "id": news.id,
+        "title": news.title,
+        "message": f"News broadcasted successfully for {club.name}!",
+    }
+
+
+@app.delete("/api/club-news/{news_id}")
+def delete_club_news(
+    news_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    news = db.query(ClubNews).filter(ClubNews.id == news_id).first()
+    if not news:
+        raise HTTPException(status_code=404, detail="News item not found")
+
+    can_delete = (
+        current_user.role in ("ADMIN", "CAMPUS_MGR")
+        or news.author_id == current_user.id
+    )
+    if not can_delete:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this news post.")
+
+    db.delete(news)
+    db.commit()
+    return {"message": "News post deleted."}
+
+
 @app.get("/api/audit-logs")
 def list_audit_logs(limit: int = 40, db: Session = Depends(get_db)):
     logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit).all()
@@ -2963,7 +3137,7 @@ def admin_bulk_onboard_users(
         full_name = parts[0]
         email = parts[1].lower()
         role = parts[2].upper() if len(parts) >= 3 and parts[2] else "STUDENT"
-        if role not in ("STUDENT", "COORDINATOR", "ADVISOR", "CAMPUS_MGR", "ADMIN"):
+        if role not in ("STUDENT", "PRESIDENT", "COORDINATOR", "ADVISOR", "CAMPUS_MGR", "ADMIN"):
             role = "STUDENT"
         campus_code = parts[3].upper() if len(parts) >= 4 and parts[3] else ""
         roll_num = parts[4] if len(parts) >= 5 and parts[4] else None

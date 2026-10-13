@@ -638,11 +638,11 @@
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Account Type</label>
             <select id="reg-role" onchange="updateRegRoleNotice()" class="w-full rounded-xl glass-input px-2.5 py-2 text-xs">
-              <option value="STUDENT">Student (Requires Admin Approval)</option>
-              <option value="ADMIN">System Admin</option>
+              <option value="STUDENT">Student (Requires Approval)</option>
+              <option value="PRESIDENT">Club President (Requires Approval)</option>
               <option value="CAMPUS_MGR">Campus Manager</option>
               <option value="ADVISOR">Faculty Advisor</option>
-              <option value="COORDINATOR">Student Coordinator</option>
+              <option value="ADMIN">System Admin</option>
             </select>
           </div>
           <div>
@@ -722,6 +722,10 @@
         </button>
         <button onclick="switchTab('certificates')" id="tab-btn-certificates" class="py-3 px-2 whitespace-nowrap text-slate-600 hover:text-indigo-600">
           Certificates & Transcript
+        </button>
+        <button onclick="switchTab('news')" id="tab-btn-news" class="py-3 px-2 whitespace-nowrap text-slate-600 hover:text-indigo-600 flex items-center gap-1.5">
+          <span>Club News</span>
+          <span class="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
         </button>
         <button onclick="switchTab('admin')" id="tab-btn-admin" class="py-3 px-2 whitespace-nowrap text-slate-600 hover:text-indigo-600 flex items-center gap-1.5">
           <span id="tab-admin-label">Admin Command Center</span>
@@ -1084,6 +1088,26 @@
       </section>
 
       <!-- ================================================================= -->
+      <!-- TAB: CLUB NEWS & ANNOUNCEMENTS (Scoped to Student's Own Club)     -->
+      <!-- ================================================================= -->
+      <section id="tab-news" class="hidden space-y-6 animate-enter">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-xl font-extrabold text-slate-900">Club News & <span class="gradient-text">Announcements</span></h2>
+            <p id="news-tab-subtitle" class="text-xs text-slate-600">Official updates from club presidents and campus leadership.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="btn-post-news" onclick="openModal('modal-create-news')" class="hidden px-4 py-2 rounded-xl btn-gradient text-xs font-semibold">
+              + Post Club Announcement
+            </button>
+          </div>
+        </div>
+
+        <!-- News Feed Container -->
+        <div id="club-news-feed" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+      </section>
+
+      <!-- ================================================================= -->
       <!-- TAB 7: ADMIN COMMAND CENTER                                       -->
       <!-- ================================================================= -->
       <section id="tab-admin" class="hidden space-y-6 animate-enter">
@@ -1297,7 +1321,7 @@
             <label class="block font-semibold text-slate-700 mb-1">Role</label>
             <select id="adm-user-role" class="w-full rounded-xl glass-input px-2.5 py-2">
               <option value="STUDENT">Student</option>
-              <option value="COORDINATOR">Student Coordinator</option>
+              <option value="PRESIDENT">Club President</option>
               <option value="ADVISOR">Faculty Advisor</option>
               <option value="CAMPUS_MGR">Campus Manager</option>
               <option value="ADMIN">System Admin</option>
@@ -1895,6 +1919,39 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=3"></script>
+  <!-- Modal: Post Club News & Announcement -->
+  <div id="modal-create-news" class="hidden fixed inset-0 z-50 bg-slate-900/45 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass-modal rounded-3xl max-w-md w-full p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-slate-900">Post Club News / Announcement</h3>
+        <button onclick="closeModal('modal-create-news')" class="text-slate-400 hover:text-slate-600 text-sm">✕</button>
+      </div>
+      <p class="text-xs text-slate-600">Broadcast updates to members of your club.</p>
+      <form onsubmit="submitClubNews(event)" class="space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Target Club</label>
+          <select id="news-club-id" required class="w-full rounded-xl glass-input px-2.5 py-2"></select>
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Announcement Title</label>
+          <input id="news-title" type="text" required placeholder="e.g. Next Saturday Hack Night & Hardware Demos" class="w-full rounded-xl glass-input px-3 py-2" />
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">News Details & Instructions</label>
+          <textarea id="news-content" rows="4" required placeholder="Enter session updates, requirements, meeting links, or announcements..." class="w-full rounded-xl glass-input px-3 py-2"></textarea>
+        </div>
+        <label class="flex items-center gap-2 text-xs text-slate-700">
+          <input id="news-pinned" type="checkbox" class="rounded border-slate-300" />
+          Pin this announcement to top of club feed
+        </label>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('modal-create-news')" class="px-4 py-2 rounded-xl glass-subcard text-slate-700">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-xl btn-gradient font-semibold">Broadcast News</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=4"></script>
 </body>
 </html>

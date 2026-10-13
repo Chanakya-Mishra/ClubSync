@@ -152,9 +152,10 @@ function updateRegRoleNotice() {
   const notice = document.getElementById('reg-approval-notice');
   const btn = document.getElementById('reg-submit-btn');
   if (!notice || !btn) return;
-  if (role === 'STUDENT') {
+  if (role === 'STUDENT' || role === 'PRESIDENT') {
     notice.classList.remove('hidden');
-    btn.textContent = 'Submit Student Account Request';
+    notice.innerHTML = `<strong>Note for ${role === 'PRESIDENT' ? 'Club Presidents' : 'Students'}:</strong> Submitting this form sends an account request to your Campus Manager or Admin. You can sign in once permitted.`;
+    btn.textContent = role === 'PRESIDENT' ? 'Submit Club President Request' : 'Submit Student Account Request';
   } else {
     notice.classList.add('hidden');
     btn.textContent = 'Create Account & Sign In';
@@ -304,6 +305,10 @@ function applyRoleVisibility() {
   // 7. Certificates Tab: Hide "+ Issue New Certificate" and all-student selector from Students
   document.getElementById('btn-issue-cert')?.classList.toggle('hidden', isStudent);
   document.getElementById('admin-transcript-selector')?.classList.toggle('hidden', isStudent);
+
+  // 8. Club News Tab: Show "+ Post Club Announcement" for Club Presidents, Campus Managers, Admins, Advisors
+  const canPostNews = ['PRESIDENT', 'COORDINATOR', 'CAMPUS_MGR', 'ADMIN', 'ADVISOR'].includes(role);
+  document.getElementById('btn-post-news')?.classList.toggle('hidden', !canPostNews);
 }
 
 async function enterApp() {
@@ -403,7 +408,7 @@ function switchTab(tabName) {
   if (tabName === 'admin' && currentUser && !['ADMIN', 'CAMPUS_MGR', 'ADVISOR'].includes(currentUser.role)) {
     tabName = 'dashboard';
   }
-  const tabs = ['dashboard', 'clubs', 'sessions', 'events', 'stretch', 'certificates', 'admin'];
+  const tabs = ['dashboard', 'clubs', 'sessions', 'events', 'stretch', 'certificates', 'news', 'admin'];
   tabs.forEach((t) => {
     document.getElementById(`tab-${t}`)?.classList.toggle('hidden', t !== tabName);
     const btn = document.getElementById(`tab-btn-${t}`);
@@ -425,6 +430,7 @@ function switchTab(tabName) {
   if (tabName === 'events') loadEvents();
   if (tabName === 'stretch') loadStretchGoals();
   if (tabName === 'certificates') loadCertificates();
+  if (tabName === 'news') loadClubNews();
   if (tabName === 'admin') loadAdminCenter();
 }
 
@@ -596,7 +602,7 @@ async function loadClubs() {
                 <select id="assign-coord-${c.id}" class="rounded border border-slate-300 px-2 py-1 text-[11px] bg-white max-w-[130px]">
                   ${studentOptions}
                 </select>
-                <button onclick="assignCoordinator('${c.id}')" class="px-2 py-1 rounded bg-slate-800 text-white text-[11px]">Assign Coord</button>
+                <button onclick="assignCoordinator('${c.id}')" class="px-2 py-1 rounded btn-gradient text-white text-[11px] font-semibold">Assign President</button>
               </div>
             </div>
             <div class="flex items-center justify-end gap-1">
@@ -621,7 +627,7 @@ async function loadClubs() {
             <div class="text-[11px] text-slate-600 space-y-0.5 pt-1">
               <div>Category: <strong>${c.category}</strong> • Members: <strong>${c.approved_members}/${c.capacity}</strong></div>
               <div>Advisor: <strong>${c.advisor_name}</strong></div>
-              <div>Coordinators: <strong>${c.coordinators.map((co) => co.name).join(', ') || 'None'}</strong></div>
+              <div>Club President: <strong class="text-indigo-700">${c.coordinators.map((co) => co.name).join(', ') || 'None (Assigned by Campus Mgr)'}</strong></div>
               <div>Schedule: ${c.meeting_rules}</div>
             </div>
           </div>
@@ -676,10 +682,10 @@ async function assignCoordinator(clubId) {
   const studentId = document.getElementById(`assign-coord-${clubId}`)?.value;
   if (!studentId) return;
   try {
-    await apiFetch(`/api/clubs/${clubId}/assign-coordinator?student_id=${studentId}`, { method: 'POST' });
-    showToast('Coordinator assigned');
+    const res = await apiFetch(`/api/clubs/${clubId}/assign-coordinator?student_id=${studentId}&tier=PRESIDENT`, { method: 'POST' });
+    showToast(res.message || 'Club President assigned');
     loadClubs();
-    loadEnrolments();
+    if (currentUser.role !== 'STUDENT') loadEnrolments();
   } catch (err) {
     showToast(err.message, true);
   }
@@ -1882,7 +1888,7 @@ async function loadAdminCenter() {
           <td class="px-4 py-2.5">
             <select onchange="updateUserRole('${u.id}', this.value)" class="rounded border border-slate-300 bg-white px-2 py-1 text-xs">
               <option value="STUDENT" ${u.role === 'STUDENT' ? 'selected' : ''}>STUDENT</option>
-              <option value="COORDINATOR" ${u.role === 'COORDINATOR' ? 'selected' : ''}>COORDINATOR</option>
+              <option value="PRESIDENT" ${u.role === 'PRESIDENT' || u.role === 'COORDINATOR' ? 'selected' : ''}>PRESIDENT</option>
               <option value="ADVISOR" ${u.role === 'ADVISOR' ? 'selected' : ''}>ADVISOR</option>
               <option value="CAMPUS_MGR" ${u.role === 'CAMPUS_MGR' ? 'selected' : ''}>CAMPUS_MGR</option>
               <option value="ADMIN" ${u.role === 'ADMIN' ? 'selected' : ''}>ADMIN</option>
@@ -1958,6 +1964,7 @@ async function decideUserAccount(userId, accountStatus) {
     if (dashTab && !dashTab.classList.contains('hidden')) {
       await loadDashboard();
     }
+  } catch (err) {
     showToast(err.message, true);
   }
 }
@@ -2080,6 +2087,131 @@ async function submitBatchCertificates(e) {
     });
     showToast(res.message);
     loadAdminCenter();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+// ============================================================================
+// TAB: Club News & Announcements
+// ============================================================================
+
+async function loadClubNews() {
+  const container = document.getElementById('club-news-feed');
+  const subtitle = document.getElementById('news-tab-subtitle');
+  if (!container) return;
+
+  // Populate news club selector for posting
+  const newsClubSelect = document.getElementById('news-club-id');
+  if (newsClubSelect) {
+    let allowedClubs = clubsList;
+    if (currentUser.role === 'STUDENT' || currentUser.role === 'PRESIDENT' || currentUser.role === 'COORDINATOR') {
+      // Filter to clubs user belongs to
+      allowedClubs = clubsList.filter((c) => c.my_membership && c.my_membership.status === 'APPROVED');
+    }
+    newsClubSelect.innerHTML = allowedClubs.length
+      ? allowedClubs.map((c) => `<option value="${c.id}">${c.name} (${c.code})</option>`).join('')
+      : `<option value="">-- No Approved Club --</option>`;
+  }
+
+  if (subtitle) {
+    if (currentUser.role === 'STUDENT') {
+      subtitle.textContent = 'Showing official news and announcements exclusively for your enrolled club(s).';
+    } else if (currentUser.role === 'PRESIDENT') {
+      subtitle.textContent = 'Showing news for your club. You can broadcast announcements directly to all members.';
+    } else {
+      subtitle.textContent = 'Official updates across campus clubs. Campus Managers and Presidents can post news.';
+    }
+  }
+
+  try {
+    const items = await apiFetch('/api/club-news');
+    if (!items.length) {
+      container.innerHTML = `
+        <div class="col-span-full bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 text-sm">
+          <p class="font-semibold text-slate-700">No announcements posted yet.</p>
+          <p class="text-xs text-slate-400 mt-1">
+            ${currentUser.role === 'STUDENT' ? 'Once your Campus Manager or Club President posts news for your club, it will appear here.' : 'Click "+ Post Club Announcement" to broadcast news to club members.'}
+          </p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = items
+      .map((n) => {
+        const canDelete =
+          ['ADMIN', 'CAMPUS_MGR'].includes(currentUser.role) || n.author_id === currentUser.id;
+        const deleteBtn = canDelete
+          ? `<button onclick="deleteClubNews('${n.id}')" class="text-xs text-rose-500 hover:text-rose-700">Delete</button>`
+          : '';
+
+        const pinBadge = n.pinned
+          ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">PINNED</span>`
+          : '';
+
+        const dateStr = n.created_at ? n.created_at.slice(0, 10) : '';
+
+        return `
+          <div class="glass-card rounded-2xl p-5 flex flex-col justify-between space-y-3 relative ${n.pinned ? 'border-amber-300' : ''}">
+            <div class="space-y-2">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs font-bold text-indigo-600 truncate">${n.club_name} (${n.club_code})</span>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  ${pinBadge}
+                  <span class="text-[11px] text-slate-400">${dateStr}</span>
+                </div>
+              </div>
+              <h3 class="text-sm font-bold text-slate-900 leading-snug">${n.title}</h3>
+              <p class="text-xs text-slate-600 whitespace-pre-line leading-relaxed">${n.content}</p>
+            </div>
+            <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+              <span>Posted by <strong>${n.author_name}</strong></span>
+              ${deleteBtn}
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+  } catch (err) {
+    container.innerHTML = `<div class="col-span-full p-4 rounded-xl bg-rose-50 text-rose-700 text-xs">${err.message}</div>`;
+  }
+}
+
+async function submitClubNews(e) {
+  e.preventDefault();
+  const clubId = document.getElementById('news-club-id').value;
+  if (!clubId) {
+    showToast('Select a club first.', true);
+    return;
+  }
+  try {
+    const res = await apiFetch('/api/club-news', {
+      method: 'POST',
+      body: JSON.stringify({
+        club_id: clubId,
+        title: document.getElementById('news-title').value.trim(),
+        content: document.getElementById('news-content').value.trim(),
+        pinned: document.getElementById('news-pinned').checked,
+      }),
+    });
+    closeModal('modal-create-news');
+    document.getElementById('news-title').value = '';
+    document.getElementById('news-content').value = '';
+    document.getElementById('news-pinned').checked = false;
+    showToast(res.message);
+    loadClubNews();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+async function deleteClubNews(newsId) {
+  if (!confirm('Are you sure you want to delete this news post?')) return;
+  try {
+    const res = await apiFetch(`/api/club-news/${newsId}`, { method: 'DELETE' });
+    showToast(res.message);
+    loadClubNews();
   } catch (err) {
     showToast(err.message, true);
   }
