@@ -354,6 +354,9 @@ class MediaGalleryItem(Base):
     media_url = Column(String(350), nullable=False)
     tagged_student_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     student_consent = Column(Boolean, default=True)  # Consent control: student can opt-in/revoke visibility
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 # Club News / Announcements posted by Club Presidents and Campus Managers
 class ClubNews(Base):
     __tablename__ = "club_news"

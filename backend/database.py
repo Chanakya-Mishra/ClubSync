@@ -22,14 +22,16 @@ else:
 os.makedirs(DATA_DIR, exist_ok=True)
 
 # Supabase Configuration
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://jmesfffyyzlhyjtdbipa.supabase.co").strip()
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "").strip()
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 SUPABASE_STORAGE_BUCKET = os.environ.get("SUPABASE_STORAGE_BUCKET", "club-tracker-assets").strip()
 
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
-# Database URL priority: SUPABASE_DB_URL -> DATABASE_URL -> POSTGRES_URL_NON_POOLING -> POSTGRES_URL -> Local SQLite fallback
+# Cloud Supabase Database URL (Configured for project jmesfffyyzlhyjtdbipa in region ap-south-1)
+SUPABASE_CLOUD_DB_URL = "postgresql://postgres.jmesfffyyzlhyjtdbipa:cognix%40902008@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require"
+
 DEFAULT_SQLITE_URL = f"sqlite:///{os.path.join(DATA_DIR, 'msot_club_tracker.db')}"
 
 
@@ -38,7 +40,10 @@ def _get_valid_env_db_url() -> str:
         val = os.environ.get(key, "").strip()
         if val and "[PASSWORD]" not in val and "[PROJECT-REF]" not in val and "YOUR_PASSWORD" not in val:
             return val
-    return DEFAULT_SQLITE_URL
+    # If running on Vercel or local cloud mode, use the verified Supabase Cloud URL directly
+    if os.environ.get("VERCEL") or os.environ.get("USE_SUPABASE"):
+        return SUPABASE_CLOUD_DB_URL
+    return SUPABASE_CLOUD_DB_URL
 
 
 RAW_DB_URL = _get_valid_env_db_url()
