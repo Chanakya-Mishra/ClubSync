@@ -3395,3 +3395,36 @@ def serve_public_verify_page(serial_number: str):
             return f.read()
     return f"<h1>Verify {serial_number}</h1>"
 
+
+@app.api_route("/favicon.ico", methods=["GET", "HEAD"], include_in_schema=False)
+def serve_favicon():
+    candidates = [
+        os.path.join(FRONTEND_DIR, "image.png"),
+        os.path.join(FRONTEND_DIR, "clubsync.ico"),
+        os.path.join(PROJECT_ROOT, "clubsync.ico"),
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            media_type = "image/png" if path.endswith(".png") else "image/x-icon"
+            return FileResponse(path, media_type=media_type)
+    raise HTTPException(status_code=404, detail="Favicon not found")
+
+
+@app.api_route("/image.png", methods=["GET", "HEAD"], include_in_schema=False)
+def serve_image_png():
+    img_path = os.path.join(FRONTEND_DIR, "image.png")
+    if os.path.exists(img_path):
+        return FileResponse(img_path, media_type="image/png")
+    raise HTTPException(status_code=404, detail="Image not found")
+
+
+@app.api_route("/clubsync.ico", methods=["GET", "HEAD"], include_in_schema=False)
+def serve_clubsync_ico():
+    ico_path = os.path.join(FRONTEND_DIR, "clubsync.ico")
+    if os.path.exists(ico_path):
+        return FileResponse(ico_path, media_type="image/x-icon")
+    raise HTTPException(status_code=404, detail="Favicon not found")
+
+
+
+
