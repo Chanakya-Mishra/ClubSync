@@ -250,7 +250,19 @@ CREATE TABLE IF NOT EXISTS public.media_gallery_items (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 17. Security & Integrity Audit Logs
+-- 17. Club News & Announcements
+CREATE TABLE IF NOT EXISTS public.club_news (
+    id VARCHAR(36) PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+    club_id VARCHAR(36) NOT NULL REFERENCES public.clubs(id) ON DELETE CASCADE,
+    author_id VARCHAR(36) NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    title VARCHAR(200) NOT NULL,
+    content TEXT NOT NULL,
+    pinned BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 18. Security & Integrity Audit Logs
 CREATE TABLE IF NOT EXISTS public.audit_logs (
     id VARCHAR(36) PRIMARY KEY DEFAULT uuid_generate_v4()::text,
     actor_id VARCHAR(36) REFERENCES public.users(id) ON DELETE SET NULL,
