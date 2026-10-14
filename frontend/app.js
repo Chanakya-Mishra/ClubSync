@@ -1,10 +1,17 @@
-// Interactive Cursor Spotlight Tracking for Dynamic Aurora & Glass Cards
+// Interactive Cursor Spotlight Tracking (Throttled with requestAnimationFrame for 60fps smoothness)
+let mouseTicking = false;
 window.addEventListener('mousemove', (e) => {
-  const x = ((e.clientX / window.innerWidth) * 100).toFixed(1) + '%';
-  const y = ((e.clientY / window.innerHeight) * 100).toFixed(1) + '%';
-  document.documentElement.style.setProperty('--mouse-x', x);
-  document.documentElement.style.setProperty('--mouse-y', y);
-});
+  if (!mouseTicking) {
+    window.requestAnimationFrame(() => {
+      const x = ((e.clientX / window.innerWidth) * 100).toFixed(1) + '%';
+      const y = ((e.clientY / window.innerHeight) * 100).toFixed(1) + '%';
+      document.documentElement.style.setProperty('--mouse-x', x);
+      document.documentElement.style.setProperty('--mouse-y', y);
+      mouseTicking = false;
+    });
+    mouseTicking = true;
+  }
+}, { passive: true });
 
 let authToken = localStorage.getItem('clubsync_token') || '';
 let currentUser = null;
@@ -327,9 +334,14 @@ async function enterApp() {
 }
 
 async function refreshUsersAndClubsSelectors() {
-  allUsersList = await apiFetch('/api/users');
-  clubsList = await apiFetch('/api/clubs');
-  eventsList = await apiFetch('/api/events');
+  const [users, clubs, events] = await Promise.all([
+    apiFetch('/api/users'),
+    apiFetch('/api/clubs'),
+    apiFetch('/api/events'),
+  ]);
+  allUsersList = users;
+  clubsList = clubs;
+  eventsList = events;
 
   const approvedUsers = allUsersList.filter((u) => u.account_status === 'APPROVED');
   const advisors = approvedUsers.filter((u) => u.role === 'ADVISOR' || u.role === 'ADMIN' || u.role === 'CAMPUS_MGR');

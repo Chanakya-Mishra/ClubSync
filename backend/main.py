@@ -669,9 +669,16 @@ def list_clubs(
     campuses_map = {c.id: c.code for c in db.query(Campus).all()}
     users_map = {u.id: u.full_name for u in db.query(User).all()}
 
+    # Single-query batch fetch for all memberships of retrieved clubs
+    club_ids = [cl.id for cl in clubs]
+    all_memberships = db.query(ClubMembership).filter(ClubMembership.club_id.in_(club_ids)).all() if club_ids else []
+    memberships_by_club: Dict[str, list] = {}
+    for m in all_memberships:
+        memberships_by_club.setdefault(m.club_id, []).append(m)
+
     out = []
     for cl in clubs:
-        memberships = db.query(ClubMembership).filter(ClubMembership.club_id == cl.id).all()
+        memberships = memberships_by_club.get(cl.id, [])
         approved_count = sum(1 for m in memberships if m.status == "APPROVED")
         pending_count = sum(1 for m in memberships if m.status == "PENDING")
         coordinators = [
