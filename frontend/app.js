@@ -13,7 +13,7 @@ window.addEventListener('mousemove', (e) => {
   }
 }, { passive: true });
 
-let authToken = localStorage.getItem('clubsync_token') || '';
+let authToken = sessionStorage.getItem('clubsync_token') || '';
 let currentUser = null;
 let campusesList = [];
 let allUsersList = [];
@@ -92,6 +92,8 @@ function openAuthScreen(mode = 'login') {
   document.getElementById('hero-screen').classList.add('hidden');
   document.getElementById('app-screen').classList.add('hidden');
   document.getElementById('auth-screen').classList.remove('hidden');
+  const passInput = document.getElementById('login-password');
+  if (passInput) passInput.value = '';
   switchAuthMode(mode);
 }
 
@@ -215,8 +217,12 @@ async function handleLogin(e) {
       body: JSON.stringify({ email, password }),
     });
     authToken = data.token;
-    localStorage.setItem('clubsync_token', authToken);
+    sessionStorage.setItem('clubsync_token', authToken);
+    localStorage.removeItem('clubsync_token');
     currentUser = data.user;
+    // Clear password input immediately after successful authentication
+    const passInput = document.getElementById('login-password');
+    if (passInput) passInput.value = '';
     await enterApp();
   } catch (err) {
     showAuthError(err.message);
@@ -249,7 +255,8 @@ async function handleRegister(e) {
     }
 
     authToken = data.token;
-    localStorage.setItem('clubsync_token', authToken);
+    sessionStorage.setItem('clubsync_token', authToken);
+    localStorage.removeItem('clubsync_token');
     currentUser = data.user;
     await enterApp();
   } catch (err) {
@@ -260,8 +267,17 @@ async function handleRegister(e) {
 function handleLogout() {
   authToken = '';
   currentUser = null;
+  sessionStorage.removeItem('clubsync_token');
   localStorage.removeItem('clubsync_token');
+
+  // Clear all login input fields so browser does not retain or auto-submit
+  const emailInput = document.getElementById('login-email');
+  const passInput = document.getElementById('login-password');
+  if (emailInput) emailInput.value = '';
+  if (passInput) passInput.value = '';
+
   showHeroScreen();
+  showToast('Signed out successfully.');
 }
 
 // ============================================================================
