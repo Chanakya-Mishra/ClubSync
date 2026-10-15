@@ -7,27 +7,20 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    :root {
-      --mouse-x: 50%;
-      --mouse-y: 30%;
-    }
     body {
       font-family: 'Inter', sans-serif;
-      background-color: #f4f7ff;
+      background-color: #f8fafc;
       overflow-x: hidden;
     }
 
-    /* ===================================================================== */
-    /* DYNAMIC ANIMATED AURORA & MESH GRADIENTS ACROSS ALL PAGES             */
-    /* ===================================================================== */
     .ambient-bg {
       position: fixed;
       inset: 0;
       z-index: -2;
-      background: linear-gradient(125deg, #eef2ff 0%, #f0f9ff 35%, #faf5ff 70%, #ecfeff 100%);
-      background-size: 300% 300%;
-      animation: auroraShift 16s ease infinite;
-      overflow: hidden;
+      background: radial-gradient(at top left, rgba(238, 242, 255, 0.85) 0%, transparent 60%),
+                  radial-gradient(at top right, rgba(245, 243, 255, 0.85) 0%, transparent 60%),
+                  #f8fafc;
+      pointer-events: none;
     }
 
     .ambient-grid {
@@ -35,89 +28,10 @@
       inset: 0;
       z-index: -1;
       background-image:
-        linear-gradient(to right, rgba(99, 102, 241, 0.05) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(99, 102, 241, 0.05) 1px, transparent 1px);
-      background-size: 44px 44px;
-      mask-image: radial-gradient(ellipse at center, rgba(0,0,0,0.85) 20%, transparent 80%);
+        linear-gradient(to right, rgba(99, 102, 241, 0.04) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(99, 102, 241, 0.04) 1px, transparent 1px);
+      background-size: 36px 36px;
       pointer-events: none;
-    }
-
-    .cursor-spotlight {
-      position: fixed;
-      inset: 0;
-      z-index: -1;
-      pointer-events: none;
-      background: radial-gradient(
-        650px circle at var(--mouse-x) var(--mouse-y),
-        rgba(59, 130, 246, 0.11),
-        rgba(139, 92, 246, 0.06) 40%,
-        transparent 75%
-      );
-      transition: background 0.15s ease;
-    }
-
-    .orb {
-      position: absolute;
-      border-radius: 9999px;
-      filter: blur(45px);
-      opacity: 0.45;
-      pointer-events: none;
-      transform: translateZ(0);
-      will-change: transform;
-    }
-    .orb-1 {
-      width: 420px;
-      height: 420px;
-      top: -80px;
-      left: -80px;
-      background: radial-gradient(circle, #3b82f6 0%, #6366f1 60%, transparent 100%);
-      animation: floatOrb1 24s ease-in-out infinite alternate;
-    }
-    .orb-2 {
-      width: 440px;
-      height: 440px;
-      top: 12%;
-      right: -100px;
-      background: radial-gradient(circle, #8b5cf6 0%, #ec4899 65%, transparent 100%);
-      animation: floatOrb2 28s ease-in-out infinite alternate;
-    }
-    .orb-3 {
-      width: 380px;
-      height: 380px;
-      bottom: -80px;
-      left: 22%;
-      background: radial-gradient(circle, #06b6d4 0%, #3b82f6 65%, transparent 100%);
-      animation: floatOrb3 26s ease-in-out infinite alternate;
-    }
-    .orb-4 {
-      width: 300px;
-      height: 300px;
-      bottom: 15%;
-      right: 18%;
-      background: radial-gradient(circle, #10b981 0%, #06b6d4 65%, transparent 100%);
-      opacity: 0.3;
-      animation: floatOrb1 32s ease-in-out infinite alternate-reverse;
-    }
-
-    @keyframes auroraShift {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
-    @keyframes floatOrb1 {
-      0% { transform: translate3d(0, 0, 0) scale(1); }
-      50% { transform: translate3d(50px, 30px, 0) scale(1.08); }
-      100% { transform: translate3d(-30px, 50px, 0) scale(0.96); }
-    }
-    @keyframes floatOrb2 {
-      0% { transform: translate3d(0, 0, 0) scale(1); }
-      50% { transform: translate3d(-50px, 40px, 0) scale(1.08); }
-      100% { transform: translate3d(30px, -40px, 0) scale(0.95); }
-    }
-    @keyframes floatOrb3 {
-      0% { transform: translate3d(0, 0, 0) scale(1); }
-      50% { transform: translate3d(40px, -40px, 0) scale(1.06); }
-      100% { transform: translate3d(-40px, 20px, 0) scale(1.02); }
     }
 
     /* ===================================================================== */
@@ -198,12 +112,10 @@
     /* DYNAMIC GRADIENT TEXT, BUTTONS & MOTION GRAPHICS                      */
     /* ===================================================================== */
     .gradient-text {
-      background: linear-gradient(90deg, #2563eb, #7c3aed, #db2777, #0891b2, #2563eb);
-      background-size: 250% auto;
+      background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
-      animation: gradientTextFlow 8s linear infinite;
     }
 
     .btn-gradient {
@@ -237,33 +149,8 @@
       background: linear-gradient(180deg, transparent 0%, rgba(79, 70, 229, 0.07) 100%);
     }
 
-    /* Motion Graphic Keyframes */
-    @keyframes gradientTextFlow {
-      0% { background-position: 0% center; }
-      100% { background-position: 250% center; }
-    }
-    @keyframes floatCard {
-      0%, 100% { transform: translateY(0px); }
-      50% { transform: translateY(-8px); }
-    }
-    @keyframes spinSlow {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-    @keyframes spinReverseSlow {
-      from { transform: rotate(360deg); }
-      to { transform: rotate(0deg); }
-    }
-    @keyframes dashStream {
-      to { stroke-dashoffset: -48; }
-    }
-    @keyframes pulseRing {
-      0% { transform: scale(0.9); opacity: 0.8; }
-      70% { transform: scale(1.45); opacity: 0; }
-      100% { transform: scale(1.45); opacity: 0; }
-    }
     @keyframes fadeSlideUp {
-      from { opacity: 0; transform: translateY(14px); }
+      from { opacity: 0; transform: translateY(12px); }
       to { opacity: 1; transform: translateY(0); }
     }
     @keyframes modalPop {
@@ -271,27 +158,16 @@
       to { opacity: 1; transform: scale(1) translateY(0); }
     }
 
-    .animate-float { animation: floatCard 6s ease-in-out infinite; }
-    .animate-spin-slow { animation: spinSlow 28s linear infinite; transform-origin: center; }
-    .animate-spin-reverse { animation: spinReverseSlow 22s linear infinite; transform-origin: center; }
-    .animate-dash { stroke-dasharray: 6 6; animation: dashStream 1.6s linear infinite; }
-    .animate-pulse-ring { animation: pulseRing 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite; transform-origin: center; }
-    .animate-enter { animation: fadeSlideUp 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+    .animate-enter { animation: fadeSlideUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
   </style>
 </head>
 <body class="text-slate-900 min-h-screen flex flex-col selection:bg-indigo-600 selection:text-white">
 
   <!-- ===================================================================== -->
-  <!-- GLOBAL DYNAMIC AURORA BACKGROUND & MOTION ORBS (ALL PAGES)            -->
+  <!-- LIGHTWEIGHT CLEAN AMBIENT BACKGROUND & GRID                           -->
   <!-- ===================================================================== -->
-  <div class="ambient-bg">
-    <div class="orb orb-1"></div>
-    <div class="orb orb-2"></div>
-    <div class="orb orb-3"></div>
-    <div class="orb orb-4"></div>
-  </div>
+  <div class="ambient-bg"></div>
   <div class="ambient-grid"></div>
-  <div class="cursor-spotlight"></div>
 
   <!-- ===================================================================== -->
   <!-- 1. CLUBSYNC HERO / LANDING PAGE                                       -->
@@ -312,146 +188,97 @@
           </div>
         </div>
         <div class="flex items-center gap-2 sm:gap-3">
-          <a href="#why-clubsync" class="hidden md:inline-block text-xs font-semibold text-slate-600 hover:text-indigo-600 px-2 py-1.5 transition">Why ClubSync</a>
-          <a href="#admin-features" class="hidden md:inline-block text-xs font-semibold text-slate-600 hover:text-indigo-600 px-2 py-1.5 transition">For Admins</a>
-          <button id="hero-back-to-app-btn" onclick="enterWorkspace()" class="hidden px-3.5 py-2 rounded-xl btn-gradient-emerald text-xs font-semibold">
+          <button id="hero-back-to-app-btn" onclick="enterWorkspace()" class="hidden px-4 py-2 rounded-xl btn-gradient-emerald text-xs font-semibold">
             Back to Workspace →
           </button>
-          <button id="hero-signin-btn" onclick="openAuthScreen('login')" class="px-4 py-2 rounded-xl btn-gradient text-xs font-semibold">
+          <button id="hero-signin-btn" onclick="openAuthScreen('login')" class="px-5 py-2 rounded-xl btn-gradient text-xs font-semibold">
             Sign In
           </button>
         </div>
       </div>
     </header>
 
-    <!-- Hero Main Banner with Live Motion Graphic Hub -->
+    <!-- Clean, Fast Hero Banner -->
     <section class="max-w-7xl mx-auto px-4 sm:px-6 pt-10 pb-16 lg:pt-14 lg:pb-20">
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
         <div class="lg:col-span-7 space-y-6 animate-enter">
           <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-subcard text-indigo-700 text-xs font-semibold shadow-sm">
-            <span class="relative flex h-2.5 w-2.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-600"></span>
-            </span>
-            Built for Multi-Campus Colleges & Technical Universities
+            <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+            Multi-Campus OS: HI-Tech, Ratnam, RGIB & JUJ
           </div>
-          <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900 leading-[1.12]">
+          <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900 leading-[1.15]">
             Synchronize every college <span class="gradient-text">club, session, event,</span> and student record in one place.
           </h1>
           <p class="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl">
-            <strong>ClubSync</strong> replaces scattered WhatsApp groups, paper attendance sheets, and unverifiable certificates with a unified, glassmorphic operating system that keeps students, club coordinators, faculty advisors, campus managers, and college admins in sync across every campus.
+            ClubSync unifies club membership, Saturday Club Day planning, anti-proxy QR check-in, deliverables submission, 30-point rubric evaluations, event teams, and verified co-curricular transcripts across every campus.
           </p>
 
+          <div class="pt-1">
+            <button onclick="openAuthScreen('login')" class="px-7 py-3.5 rounded-xl btn-gradient text-sm font-semibold shadow-md hover:shadow-lg inline-flex items-center gap-2">
+              <span>Sign In to Workspace</span>
+              <span>→</span>
+            </button>
+          </div>
 
           <!-- Glass Key Pillars Pill Strip -->
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3">
             <div class="glass-card rounded-xl p-3.5">
               <div class="text-xs font-extrabold gradient-text">4 Campuses</div>
-              <div class="text-[11px] text-slate-600 mt-0.5">HI-Tech, Ratnam, RGIB & JUJ synced live</div>
+              <div class="text-[11px] text-slate-600 mt-0.5">HI-Tech, Ratnam, RGIB & JUJ live</div>
             </div>
             <div class="glass-card rounded-xl p-3.5">
               <div class="text-xs font-extrabold text-indigo-600">Anti-Proxy QR</div>
-              <div class="text-[11px] text-slate-600 mt-0.5">15s rotating QR + 6-digit OTP + Geofence</div>
+              <div class="text-[11px] text-slate-600 mt-0.5">Rotating QR + 6-digit OTP + Geo</div>
             </div>
             <div class="glass-card rounded-xl p-3.5">
               <div class="text-xs font-extrabold text-emerald-600">30-Pt Rubrics</div>
-              <div class="text-[11px] text-slate-600 mt-0.5">Structured weekly deliverables & grading</div>
+              <div class="text-[11px] text-slate-600 mt-0.5">Structured deliverables & grading</div>
             </div>
             <div class="glass-card rounded-xl p-3.5">
               <div class="text-xs font-extrabold text-amber-600">SHA-256 PDFs</div>
-              <div class="text-[11px] text-slate-600 mt-0.5">Tamper-evident certificates & transcripts</div>
+              <div class="text-[11px] text-slate-600 mt-0.5">Tamper-evident transcripts & certs</div>
             </div>
           </div>
         </div>
 
-        <!-- Right Interactive Motion Graphic & Glass Workflow Hub -->
-        <div class="lg:col-span-5 animate-float">
-          <div class="glass-card rounded-3xl p-6 space-y-5">
-            <!-- Animated SVG Multi-Campus Synchronization Radar -->
-            <div class="relative rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-4 overflow-hidden border border-indigo-500/30 shadow-inner">
-              <div class="flex items-center justify-between text-[11px] text-indigo-200 mb-1 relative z-10">
-                <span class="font-bold tracking-wider uppercase text-indigo-300">Live Multi-Campus Sync Engine</span>
-                <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 font-semibold">4 Nodes Online</span>
-              </div>
-              <svg viewBox="0 0 400 185" class="w-full h-40">
-                <defs>
-                  <linearGradient id="syncGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#38bdf8" />
-                    <stop offset="50%" stop-color="#818cf8" />
-                    <stop offset="100%" stop-color="#e879f9" />
-                  </linearGradient>
-                  <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stop-color="rgba(99, 102, 241, 0.55)" />
-                    <stop offset="100%" stop-color="rgba(99, 102, 241, 0)" />
-                  </radialGradient>
-                </defs>
-
-                <!-- Ambient Core Glow -->
-                <circle cx="200" cy="95" r="72" fill="url(#coreGlow)" />
-
-                <!-- Rotating Orbital Rings -->
-                <g class="animate-spin-slow" style="transform-origin: 200px 95px;">
-                  <circle cx="200" cy="95" r="64" fill="none" stroke="rgba(129, 140, 248, 0.25)" stroke-width="1.2" stroke-dasharray="5 5" />
-                  <circle cx="200" cy="31" r="3.5" fill="#38bdf8" />
-                  <circle cx="200" cy="159" r="3.5" fill="#e879f9" />
-                </g>
-                <g class="animate-spin-reverse" style="transform-origin: 200px 95px;">
-                  <circle cx="200" cy="95" r="44" fill="none" stroke="rgba(56, 189, 248, 0.3)" stroke-width="1.2" stroke-dasharray="8 4" />
-                </g>
-
-                <!-- Animated Data Streams from 4 Campuses to ClubSync Core -->
-                <line x1="65" y1="42" x2="200" y2="95" stroke="url(#syncGrad)" stroke-width="2" class="animate-dash" />
-                <line x1="335" y1="42" x2="200" y2="95" stroke="url(#syncGrad)" stroke-width="2" class="animate-dash" />
-                <line x1="65" y1="148" x2="200" y2="95" stroke="url(#syncGrad)" stroke-width="2" class="animate-dash" />
-                <line x1="335" y1="148" x2="200" y2="95" stroke="url(#syncGrad)" stroke-width="2" class="animate-dash" />
-
-                <!-- 4 Campus Nodes -->
-                <g>
-                  <circle cx="65" cy="42" r="14" fill="#1e1b4b" stroke="#38bdf8" stroke-width="2" />
-                  <text x="65" y="45" text-anchor="middle" fill="#e0f2fe" font-size="8" font-weight="bold">HI-Tech</text>
-                </g>
-                <g>
-                  <circle cx="335" cy="42" r="14" fill="#1e1b4b" stroke="#818cf8" stroke-width="2" />
-                  <text x="335" y="45" text-anchor="middle" fill="#e0e7ff" font-size="8" font-weight="bold">Ratnam</text>
-                </g>
-                <g>
-                  <circle cx="65" cy="148" r="14" fill="#1e1b4b" stroke="#34d399" stroke-width="2" />
-                  <text x="65" y="151" text-anchor="middle" fill="#d1fae5" font-size="8" font-weight="bold">RGIB</text>
-                </g>
-                <g>
-                  <circle cx="335" cy="148" r="14" fill="#1e1b4b" stroke="#e879f9" stroke-width="2" />
-                  <text x="335" y="151" text-anchor="middle" fill="#fae8ff" font-size="8" font-weight="bold">JUJ</text>
-                </g>
-
-                <!-- Central ClubSync Hub -->
-                <circle cx="200" cy="95" r="24" fill="rgba(99, 102, 241, 0.35)" class="animate-pulse-ring" />
-                <circle cx="200" cy="95" r="22" fill="url(#syncGrad)" />
-                <text x="200" y="93" text-anchor="middle" fill="#ffffff" font-size="8.5" font-weight="800">CLUB</text>
-                <text x="200" y="103" text-anchor="middle" fill="#ffffff" font-size="8.5" font-weight="800">SYNC</text>
-              </svg>
+        <!-- Right Side: Clean Role Matrix (from MSOT Challenge PDF) -->
+        <div class="lg:col-span-5 animate-enter">
+          <div class="glass-card rounded-3xl p-6 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-200/60">
+              <span class="text-xs font-bold uppercase tracking-wider text-indigo-600">Roles & Workflows</span>
+              <span class="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">Live System</span>
             </div>
 
-            <!-- 4 Glass Workflow Steps -->
-            <div class="space-y-2.5 text-xs">
+            <div class="space-y-3 text-xs">
               <div class="flex gap-3 items-start p-3 rounded-xl glass-subcard">
-                <div class="w-6 h-6 rounded-lg btn-gradient text-white font-bold flex items-center justify-center shrink-0">1</div>
+                <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center shrink-0 text-sm">🎓</div>
                 <div>
-                  <div class="font-semibold text-slate-900">Verified Student Onboarding & Club Caps</div>
-                  <p class="text-slate-600 mt-0.5">Admins add students directly—or students request an account and sign in once permitted by the Admin.</p>
+                  <div class="font-bold text-slate-900">Students</div>
+                  <p class="text-slate-600 mt-0.5">Join clubs, scan rotating QR to check in, upload deliverables, and download verified co-curricular transcripts.</p>
                 </div>
               </div>
+
               <div class="flex gap-3 items-start p-3 rounded-xl glass-subcard">
-                <div class="w-6 h-6 rounded-lg btn-gradient text-white font-bold flex items-center justify-center shrink-0">2</div>
+                <div class="w-8 h-8 rounded-lg bg-sky-50 text-sky-700 font-bold flex items-center justify-center shrink-0 text-sm">⚡</div>
                 <div>
-                  <div class="font-semibold text-slate-900">7-Step Saturday Club Day Engine</div>
-                  <p class="text-slate-600 mt-0.5">Coordinators plan topics → Advisors approve → Students check in via 6-digit code/QR & submit deliverables → 30-pt rubric grading.</p>
+                  <div class="font-bold text-slate-900">Club Presidents & Coordinators</div>
+                  <p class="text-slate-600 mt-0.5">Plan Saturday sessions, launch live QR check-ins, grade 30-pt rubrics, and publish club announcements.</p>
                 </div>
               </div>
+
               <div class="flex gap-3 items-start p-3 rounded-xl glass-subcard">
-                <div class="w-6 h-6 rounded-lg btn-gradient-emerald text-white font-bold flex items-center justify-center shrink-0">3</div>
+                <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 font-bold flex items-center justify-center shrink-0 text-sm">📋</div>
                 <div>
-                  <div class="font-semibold text-slate-900">Events, Budgets, Auto Duty Leave & Media Consent</div>
-                  <p class="text-slate-600 mt-0.5">Register teams via invite code, auto-generate academic Duty Leave for inter-college events, and control photo consent.</p>
+                  <div class="font-bold text-slate-900">Faculty Advisors</div>
+                  <p class="text-slate-600 mt-0.5">Approve weekly session plans, evaluate submissions, and validate achievement awards.</p>
+                </div>
+              </div>
+
+              <div class="flex gap-3 items-start p-3 rounded-xl glass-subcard">
+                <div class="w-8 h-8 rounded-lg bg-purple-50 text-purple-700 font-bold flex items-center justify-center shrink-0 text-sm">🏛️</div>
+                <div>
+                  <div class="font-bold text-slate-900">Campus Managers & Admins</div>
+                  <p class="text-slate-600 mt-0.5">Approve new clubs, permit student registrations, sanction Duty Leaves & budgets, and export academic reports.</p>
                 </div>
               </div>
             </div>
@@ -459,81 +286,6 @@
         </div>
       </div>
     </section>
-
-    <!-- Why Colleges Need ClubSync -->
-    <section id="why-clubsync" class="py-12">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6">
-        <div class="max-w-3xl mb-10">
-          <span class="text-xs font-bold uppercase tracking-wider text-indigo-600">Why ClubSync</span>
-          <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">How ClubSync Helps Colleges <span class="gradient-text">Synchronize Club Activities</span></h2>
-          <p class="text-sm text-slate-600 mt-2">
-            In most colleges, clubs start the semester with enthusiasm but lose momentum within weeks due to disconnected tools. Here is how ClubSync solves every operational gap:
-          </p>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div class="p-6 rounded-2xl glass-card space-y-2.5">
-            <div class="text-xs font-bold text-rose-600 uppercase">Without ClubSync</div>
-            <div class="font-bold text-slate-900 text-sm">Proxy Attendance & Paper Sign-In Sheets</div>
-            <p class="text-xs text-slate-600">Forwarded QR screenshots on WhatsApp and manual sheets inflate attendance numbers and hide inactive clubs.</p>
-            <div class="pt-2.5 border-t border-slate-200/60 text-xs font-semibold text-emerald-700">
-              ✓ ClubSync Fix: 15-second rotating HMAC QR codes, 6-digit live OTPs, campus GPS geofencing, and mandatory audit reasons.
-            </div>
-          </div>
-
-          <div class="p-6 rounded-2xl glass-card space-y-2.5">
-            <div class="text-xs font-bold text-rose-600 uppercase">Without ClubSync</div>
-            <div class="font-bold text-slate-900 text-sm">Unstructured Sessions & Zero Academic Proof</div>
-            <p class="text-xs text-slate-600">Sessions happen ad-hoc without faculty visibility, student deliverables get lost in chat threads, and grading is subjective.</p>
-            <div class="pt-2.5 border-t border-slate-200/60 text-xs font-semibold text-emerald-700">
-              ✓ ClubSync Fix: Advisor-approved weekly session plans, timestamped deliverable submissions, and standardized 30-point rubric evaluations.
-            </div>
-          </div>
-
-          <div class="p-6 rounded-2xl glass-card space-y-2.5">
-            <div class="text-xs font-bold text-rose-600 uppercase">Without ClubSync</div>
-            <div class="font-bold text-slate-900 text-sm">Placement-Season Certificate Chaos</div>
-            <p class="text-xs text-slate-600">During placements, students claim unverified club titles and colleges have no single record of co-curricular achievements.</p>
-            <div class="pt-2.5 border-t border-slate-200/60 text-xs font-semibold text-emerald-700">
-              ✓ ClubSync Fix: Instant Co-Curricular Transcripts and SHA-256 signed PDF certificates verifiable by any recruiter or faculty member.
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Built for College Admins Section -->
-    <section id="admin-features" class="max-w-7xl mx-auto px-4 sm:px-6 py-12">
-      <div class="glass-dark text-white rounded-3xl p-6 sm:p-10">
-        <div class="max-w-3xl mb-8">
-          <span class="text-xs font-bold uppercase tracking-wider text-indigo-300">Designed with an Admin Mindset</span>
-          <h2 class="text-2xl sm:text-3xl font-extrabold mt-1">Admin Command Center: Built to Save Hours Every Week</h2>
-          <p class="text-sm text-slate-300 mt-2">
-            Admins control who enters the platform, manage clubs across campuses, and approve pending requests from a single unified command center:
-          </p>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-          <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-4 space-y-1.5 hover:bg-white/15 transition">
-            <div class="font-bold text-sky-300 text-sm">1. Student Account Permission & Direct Creation</div>
-            <p class="text-slate-200 leading-relaxed">Students who self-register enter a pending queue until the Admin permits their account—or Admins can add students directly and via CSV with immediate access.</p>
-          </div>
-          <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-4 space-y-1.5 hover:bg-white/15 transition">
-            <div class="font-bold text-emerald-300 text-sm">2. Unified Approvals Inbox</div>
-            <p class="text-slate-200 leading-relaxed">See every pending student account, club, enrolment, session plan, budget, and duty leave in one inbox—and approve them individually or with one click.</p>
-          </div>
-          <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-4 space-y-1.5 hover:bg-white/15 transition">
-            <div class="font-bold text-amber-300 text-sm">3. One-Click Batch Certificate Generator</div>
-            <p class="text-slate-200 leading-relaxed">Issue cryptographically signed PDF certificates to every checked-in participant of a Hackathon or every approved member of a Club simultaneously.</p>
-          </div>
-          <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-4 space-y-1.5 hover:bg-white/15 transition">
-            <div class="font-bold text-purple-300 text-sm">4. Live Policy & Geofence Controls</div>
-            <p class="text-slate-200 leading-relaxed">Toggle campus GPS geofencing on/off for indoor halls, adjust Primary/Secondary club caps on the fly, manage campuses, and inspect the live security audit trail.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-
   </div>
 
   <!-- ===================================================================== -->
@@ -656,9 +408,6 @@
         </div>
 
         <div class="flex items-center gap-3">
-          <button onclick="showHeroScreen()" class="px-3 py-1.5 rounded-xl glass-subcard text-slate-700 text-xs font-semibold">
-            About ClubSync
-          </button>
           <div class="text-right">
             <div id="nav-user-name" class="text-xs font-bold text-slate-900"></div>
             <div id="nav-user-meta" class="text-[11px] text-slate-500"></div>
@@ -685,7 +434,7 @@
           Events & Teams
         </button>
         <button onclick="switchTab('stretch')" id="tab-btn-stretch" class="py-3 px-2 whitespace-nowrap text-slate-600 hover:text-indigo-600">
-          Budgets, Duty Leave & Gallery
+          Budgets & Duty Leave
         </button>
         <button onclick="switchTab('certificates')" id="tab-btn-certificates" class="py-3 px-2 whitespace-nowrap text-slate-600 hover:text-indigo-600">
           Certificates & Transcript
