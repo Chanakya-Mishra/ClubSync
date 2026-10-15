@@ -9,7 +9,7 @@
   <style>
     body {
       font-family: 'Inter', sans-serif;
-      background-color: #f8fafc;
+      background-color: #f4f7fc;
       overflow-x: hidden;
     }
 
@@ -17,9 +17,13 @@
       position: fixed;
       inset: 0;
       z-index: -2;
-      background: radial-gradient(at top left, rgba(238, 242, 255, 0.85) 0%, transparent 60%),
-                  radial-gradient(at top right, rgba(245, 243, 255, 0.85) 0%, transparent 60%),
-                  #f8fafc;
+      background:
+        radial-gradient(circle at 10% 15%, rgba(99, 102, 241, 0.25) 0%, transparent 45%),
+        radial-gradient(circle at 90% 20%, rgba(217, 70, 239, 0.22) 0%, transparent 45%),
+        radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.20) 0%, transparent 50%),
+        radial-gradient(circle at 80% 85%, rgba(16, 185, 129, 0.20) 0%, transparent 45%),
+        radial-gradient(circle at 20% 85%, rgba(129, 140, 248, 0.22) 0%, transparent 50%),
+        linear-gradient(135deg, #f0f4ff 0%, #faf8ff 50%, #f0fdf9 100%);
       pointer-events: none;
     }
 
@@ -28,81 +32,87 @@
       inset: 0;
       z-index: -1;
       background-image:
-        linear-gradient(to right, rgba(99, 102, 241, 0.04) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(99, 102, 241, 0.04) 1px, transparent 1px);
+        linear-gradient(to right, rgba(99, 102, 241, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(99, 102, 241, 0.05) 1px, transparent 1px);
       background-size: 36px 36px;
+      mask-image: radial-gradient(ellipse at center, rgba(0,0,0,0.95) 25%, transparent 85%);
       pointer-events: none;
     }
 
     /* ===================================================================== */
-    /* FROSTED GLASSMORPHISM CARDS, HEADERS & MODALS                         */
+    /* FROSTED GLASSMORPHISM CARDS, HEADERS & MODALS (TRANSPARENT GLASS)     */
     /* ===================================================================== */
     .glass-header {
-      background: rgba(255, 255, 255, 0.88);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.85);
-      box-shadow: 0 4px 20px rgba(37, 99, 235, 0.04);
+      background: rgba(255, 255, 255, 0.62);
+      backdrop-filter: blur(16px) saturate(180%);
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.7);
+      box-shadow: 0 4px 20px rgba(37, 99, 235, 0.03);
       transform: translateZ(0);
     }
 
     .glass-card {
       position: relative;
-      background: rgba(255, 255, 255, 0.85);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      border: 1px solid rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.48);
+      backdrop-filter: blur(16px) saturate(190%);
+      -webkit-backdrop-filter: blur(16px) saturate(190%);
+      border: 1px solid rgba(255, 255, 255, 0.75);
       box-shadow:
-        0 4px 20px -4px rgba(30, 41, 59, 0.05),
-        0 2px 6px -1px rgba(59, 130, 246, 0.02);
-      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        0 8px 32px 0 rgba(31, 38, 135, 0.06),
+        0 2px 6px 0 rgba(99, 102, 241, 0.03),
+        inset 0 1px 1px 0 rgba(255, 255, 255, 0.9);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
       transform: translateZ(0);
     }
 
     .glass-card:hover {
+      background: rgba(255, 255, 255, 0.64);
       transform: translateY(-2px);
-      border-color: rgba(99, 102, 241, 0.4);
-      box-shadow: 0 12px 28px -8px rgba(37, 99, 235, 0.1);
+      border-color: rgba(99, 102, 241, 0.45);
+      box-shadow: 0 14px 34px -8px rgba(37, 99, 235, 0.12), inset 0 1px 1px 0 rgba(255, 255, 255, 0.95);
     }
 
     .glass-dark {
-      background: rgba(15, 23, 42, 0.95);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border: 1px solid rgba(148, 163, 184, 0.22);
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(148, 163, 184, 0.25);
       box-shadow: 0 16px 36px -10px rgba(15, 23, 42, 0.3);
       transform: translateZ(0);
     }
 
     .glass-subcard {
-      background: rgba(255, 255, 255, 0.75);
-      backdrop-filter: blur(6px);
-      border: 1px solid rgba(255, 255, 255, 0.85);
-      transition: transform 0.18s ease, background 0.18s ease;
+      background: rgba(255, 255, 255, 0.42);
+      backdrop-filter: blur(12px) saturate(170%);
+      -webkit-backdrop-filter: blur(12px) saturate(170%);
+      border: 1px solid rgba(255, 255, 255, 0.65);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02), inset 0 1px 1px rgba(255, 255, 255, 0.7);
+      transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
       transform: translateZ(0);
     }
     .glass-subcard:hover {
-      background: rgba(255, 255, 255, 0.95);
+      background: rgba(255, 255, 255, 0.65);
       transform: translateY(-1px);
     }
 
     .glass-modal {
-      background: linear-gradient(145deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 250, 252, 0.85) 100%);
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.82) 0%, rgba(248, 250, 252, 0.70) 100%);
       backdrop-filter: blur(24px) saturate(190%);
       -webkit-backdrop-filter: blur(24px) saturate(190%);
-      border: 1px solid rgba(255, 255, 255, 0.9);
-      box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.28);
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.28), inset 0 1px 1px rgba(255, 255, 255, 0.9);
       animation: modalPop 0.26s cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     .glass-input {
-      background: rgba(255, 255, 255, 0.75);
+      background: rgba(255, 255, 255, 0.52);
       backdrop-filter: blur(8px);
-      border: 1px solid rgba(203, 213, 225, 0.85);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(203, 213, 225, 0.75);
       transition: all 0.2s ease;
     }
     .glass-input:focus {
-      background: rgba(255, 255, 255, 0.96);
+      background: rgba(255, 255, 255, 0.85);
       border-color: #4f46e5;
       box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.16);
       outline: none;
@@ -112,10 +122,12 @@
     /* DYNAMIC GRADIENT TEXT, BUTTONS & MOTION GRAPHICS                      */
     /* ===================================================================== */
     .gradient-text {
-      background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+      background: linear-gradient(90deg, #2563eb, #7c3aed, #db2777, #0891b2, #2563eb);
+      background-size: 250% auto;
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
+      animation: gradientTextFlow 8s linear infinite;
     }
 
     .btn-gradient {
@@ -149,6 +161,31 @@
       background: linear-gradient(180deg, transparent 0%, rgba(79, 70, 229, 0.07) 100%);
     }
 
+    /* Motion Graphic Keyframes */
+    @keyframes gradientTextFlow {
+      0% { background-position: 0% center; }
+      100% { background-position: 250% center; }
+    }
+    @keyframes floatCard {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-7px); }
+    }
+    @keyframes spinSlow {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes spinReverseSlow {
+      from { transform: rotate(360deg); }
+      to { transform: rotate(0deg); }
+    }
+    @keyframes dashStream {
+      to { stroke-dashoffset: -48; }
+    }
+    @keyframes pulseRing {
+      0% { transform: scale(0.9); opacity: 0.8; }
+      70% { transform: scale(1.45); opacity: 0; }
+      100% { transform: scale(1.45); opacity: 0; }
+    }
     @keyframes fadeSlideUp {
       from { opacity: 0; transform: translateY(12px); }
       to { opacity: 1; transform: translateY(0); }
@@ -158,6 +195,11 @@
       to { opacity: 1; transform: scale(1) translateY(0); }
     }
 
+    .animate-float { animation: floatCard 6s ease-in-out infinite; }
+    .animate-spin-slow { animation: spinSlow 28s linear infinite; transform-origin: center; }
+    .animate-spin-reverse { animation: spinReverseSlow 22s linear infinite; transform-origin: center; }
+    .animate-dash { stroke-dasharray: 6 6; animation: dashStream 1.6s linear infinite; }
+    .animate-pulse-ring { animation: pulseRing 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite; transform-origin: center; }
     .animate-enter { animation: fadeSlideUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
   </style>
 </head>
@@ -241,44 +283,96 @@
           </div>
         </div>
 
-        <!-- Right Side: Clean Role Matrix (from MSOT Challenge PDF) -->
-        <div class="lg:col-span-5 animate-enter">
-          <div class="glass-card rounded-3xl p-6 space-y-4">
-            <div class="flex items-center justify-between pb-3 border-b border-slate-200/60">
-              <span class="text-xs font-bold uppercase tracking-wider text-indigo-600">Roles & Workflows</span>
-              <span class="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">Live System</span>
+        <!-- Right Side: Animated SVG Motion Graphics Radar & Roles -->
+        <div class="lg:col-span-5 animate-float">
+          <div class="glass-card rounded-3xl p-5 space-y-4">
+            <!-- Animated SVG Multi-Campus Synchronization Radar -->
+            <div class="relative rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-4 overflow-hidden border border-indigo-500/30 shadow-inner">
+              <div class="flex items-center justify-between text-[11px] text-indigo-200 mb-1 relative z-10">
+                <span class="font-bold tracking-wider uppercase text-indigo-300">Live Multi-Campus Sync Engine</span>
+                <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 font-semibold">4 Nodes Online</span>
+              </div>
+              <svg viewBox="0 0 400 185" class="w-full h-36">
+                <defs>
+                  <linearGradient id="syncGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#38bdf8" />
+                    <stop offset="50%" stop-color="#818cf8" />
+                    <stop offset="100%" stop-color="#e879f9" />
+                  </linearGradient>
+                  <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stop-color="rgba(99, 102, 241, 0.55)" />
+                    <stop offset="100%" stop-color="rgba(99, 102, 241, 0)" />
+                  </radialGradient>
+                </defs>
+
+                <!-- Ambient Core Glow -->
+                <circle cx="200" cy="95" r="72" fill="url(#coreGlow)" />
+
+                <!-- Rotating Orbital Rings -->
+                <g class="animate-spin-slow" style="transform-origin: 200px 95px;">
+                  <circle cx="200" cy="95" r="64" fill="none" stroke="rgba(129, 140, 248, 0.25)" stroke-width="1.2" stroke-dasharray="5 5" />
+                  <circle cx="200" cy="31" r="3.5" fill="#38bdf8" />
+                  <circle cx="200" cy="159" r="3.5" fill="#e879f9" />
+                </g>
+                <g class="animate-spin-reverse" style="transform-origin: 200px 95px;">
+                  <circle cx="200" cy="95" r="44" fill="none" stroke="rgba(56, 189, 248, 0.3)" stroke-width="1.2" stroke-dasharray="8 4" />
+                </g>
+
+                <!-- Animated Data Streams from 4 Campuses to ClubSync Core -->
+                <line x1="65" y1="42" x2="200" y2="95" stroke="url(#syncGrad)" stroke-width="2" class="animate-dash" />
+                <line x1="335" y1="42" x2="200" y2="95" stroke="url(#syncGrad)" stroke-width="2" class="animate-dash" />
+                <line x1="65" y1="148" x2="200" y2="95" stroke="url(#syncGrad)" stroke-width="2" class="animate-dash" />
+                <line x1="335" y1="148" x2="200" y2="95" stroke="url(#syncGrad)" stroke-width="2" class="animate-dash" />
+
+                <!-- 4 Campus Nodes -->
+                <g>
+                  <circle cx="65" cy="42" r="14" fill="#1e1b4b" stroke="#38bdf8" stroke-width="2" />
+                  <text x="65" y="45" text-anchor="middle" fill="#e0f2fe" font-size="8" font-weight="bold">HI-Tech</text>
+                </g>
+                <g>
+                  <circle cx="335" cy="42" r="14" fill="#1e1b4b" stroke="#818cf8" stroke-width="2" />
+                  <text x="335" y="45" text-anchor="middle" fill="#e0e7ff" font-size="8" font-weight="bold">Ratnam</text>
+                </g>
+                <g>
+                  <circle cx="65" cy="148" r="14" fill="#1e1b4b" stroke="#34d399" stroke-width="2" />
+                  <text x="65" y="151" text-anchor="middle" fill="#d1fae5" font-size="8" font-weight="bold">RGIB</text>
+                </g>
+                <g>
+                  <circle cx="335" cy="148" r="14" fill="#1e1b4b" stroke="#e879f9" stroke-width="2" />
+                  <text x="335" y="151" text-anchor="middle" fill="#fae8ff" font-size="8" font-weight="bold">JUJ</text>
+                </g>
+
+                <!-- Central ClubSync Hub -->
+                <circle cx="200" cy="95" r="24" fill="rgba(99, 102, 241, 0.35)" class="animate-pulse-ring" />
+                <circle cx="200" cy="95" r="22" fill="url(#syncGrad)" />
+                <text x="200" y="93" text-anchor="middle" fill="#ffffff" font-size="8.5" font-weight="800">CLUB</text>
+                <text x="200" y="103" text-anchor="middle" fill="#ffffff" font-size="8.5" font-weight="800">SYNC</text>
+              </svg>
             </div>
 
-            <div class="space-y-3 text-xs">
-              <div class="flex gap-3 items-start p-3 rounded-xl glass-subcard">
-                <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center shrink-0 text-sm">🎓</div>
+            <!-- Role Matrix Overview -->
+            <div class="space-y-2.5 text-xs">
+              <div class="flex gap-3 items-start p-2.5 rounded-xl glass-subcard">
+                <div class="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-700 font-bold flex items-center justify-center shrink-0 text-sm">🎓</div>
                 <div>
                   <div class="font-bold text-slate-900">Students</div>
-                  <p class="text-slate-600 mt-0.5">Join clubs, scan rotating QR to check in, upload deliverables, and download verified co-curricular transcripts.</p>
+                  <p class="text-slate-600 text-[11px] mt-0.5">Join clubs, scan rotating QR check-in, submit work & get transcripts.</p>
                 </div>
               </div>
 
-              <div class="flex gap-3 items-start p-3 rounded-xl glass-subcard">
-                <div class="w-8 h-8 rounded-lg bg-sky-50 text-sky-700 font-bold flex items-center justify-center shrink-0 text-sm">⚡</div>
+              <div class="flex gap-3 items-start p-2.5 rounded-xl glass-subcard">
+                <div class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-700 font-bold flex items-center justify-center shrink-0 text-sm">⚡</div>
                 <div>
-                  <div class="font-bold text-slate-900">Club Presidents & Coordinators</div>
-                  <p class="text-slate-600 mt-0.5">Plan Saturday sessions, launch live QR check-ins, grade 30-pt rubrics, and publish club announcements.</p>
+                  <div class="font-bold text-slate-900">Club Presidents</div>
+                  <p class="text-slate-600 text-[11px] mt-0.5">Plan Saturday sessions, launch live QR, grade rubrics & post announcements.</p>
                 </div>
               </div>
 
-              <div class="flex gap-3 items-start p-3 rounded-xl glass-subcard">
-                <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 font-bold flex items-center justify-center shrink-0 text-sm">📋</div>
+              <div class="flex gap-3 items-start p-2.5 rounded-xl glass-subcard">
+                <div class="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-700 font-bold flex items-center justify-center shrink-0 text-sm">🏛️</div>
                 <div>
-                  <div class="font-bold text-slate-900">Faculty Advisors</div>
-                  <p class="text-slate-600 mt-0.5">Approve weekly session plans, evaluate submissions, and validate achievement awards.</p>
-                </div>
-              </div>
-
-              <div class="flex gap-3 items-start p-3 rounded-xl glass-subcard">
-                <div class="w-8 h-8 rounded-lg bg-purple-50 text-purple-700 font-bold flex items-center justify-center shrink-0 text-sm">🏛️</div>
-                <div>
-                  <div class="font-bold text-slate-900">Campus Managers & Admins</div>
-                  <p class="text-slate-600 mt-0.5">Approve new clubs, permit student registrations, sanction Duty Leaves & budgets, and export academic reports.</p>
+                  <div class="font-bold text-slate-900">Admins & Campus Managers</div>
+                  <p class="text-slate-600 text-[11px] mt-0.5">Permit accounts, approve new clubs, verify Duty Leaves & export reports.</p>
                 </div>
               </div>
             </div>

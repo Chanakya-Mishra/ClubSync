@@ -461,7 +461,7 @@ async function loadDashboard() {
   document.getElementById('dash-campus-cards').innerHTML = data.campus_breakdown
     .map(
       (c) => `
-      <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
+      <div class="glass-subcard rounded-xl p-4 space-y-2">
         <div class="flex items-center justify-between">
           <span class="font-bold text-sm text-slate-900">${c.campus_code}</span>
           <span class="text-xs font-semibold text-blue-600">${c.participation_rate_pct}% Active</span>
@@ -584,7 +584,7 @@ async function loadClubs() {
 
   const grid = document.getElementById('clubs-grid');
   if (!clubsList.length) {
-    grid.innerHTML = `<div class="col-span-full bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500 text-sm">No clubs available yet.</div>`;
+    grid.innerHTML = `<div class="col-span-full glass-card rounded-2xl p-8 text-center text-slate-500 text-sm">No clubs available yet.</div>`;
     return;
   }
 
@@ -632,7 +632,7 @@ async function loadClubs() {
         : '';
 
       return `
-        <div class="bg-white rounded-xl border border-slate-200 p-5 flex flex-col justify-between space-y-3">
+        <div class="glass-card rounded-2xl p-5 flex flex-col justify-between space-y-3">
           <div class="space-y-2">
             <div class="flex items-center justify-between">
               <span class="text-xs font-bold text-blue-600">${c.code} • ${c.campus_code}</span>
@@ -828,7 +828,7 @@ async function loadSessions() {
   const sessions = await apiFetch('/api/sessions');
   const container = document.getElementById('sessions-list');
   if (!sessions.length) {
-    container.innerHTML = `<div class="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500 text-sm">No Club Day sessions scheduled yet.</div>`;
+    container.innerHTML = `<div class="glass-card rounded-2xl p-8 text-center text-slate-500 text-sm">No Club Day sessions scheduled yet.</div>`;
     return;
   }
 
@@ -875,7 +875,7 @@ async function loadSessions() {
         : '';
 
       return `
-        <div class="bg-white rounded-xl border border-slate-200 p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div class="glass-card rounded-2xl p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div class="space-y-1.5">
             <div class="flex flex-wrap items-center gap-2">
               <span class="text-xs font-bold text-blue-600">${s.club_name} (${s.club_code})</span>
@@ -1205,7 +1205,7 @@ async function loadEvents() {
 
   const grid = document.getElementById('events-grid');
   if (!eventsList.length) {
-    grid.innerHTML = `<div class="col-span-full bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500 text-sm">No events scheduled yet.</div>`;
+    grid.innerHTML = `<div class="col-span-full glass-card rounded-2xl p-8 text-center text-slate-500 text-sm">No events scheduled yet.</div>`;
     return;
   }
 
@@ -2172,7 +2172,7 @@ async function loadClubNews() {
     const items = await apiFetch('/api/club-news');
     if (!items.length) {
       container.innerHTML = `
-        <div class="col-span-full bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 text-sm">
+        <div class="col-span-full glass-card rounded-2xl p-8 text-center text-slate-500 text-sm">
           <p class="font-semibold text-slate-700">No announcements posted yet.</p>
           <p class="text-xs text-slate-400 mt-1">
             ${currentUser.role === 'STUDENT' ? 'Once your Campus Manager or Club President posts news for your club, it will appear here.' : 'Click "+ Post Club Announcement" to broadcast news to club members.'}
