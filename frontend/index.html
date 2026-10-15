@@ -317,11 +317,8 @@
           <button id="hero-back-to-app-btn" onclick="enterWorkspace()" class="hidden px-3.5 py-2 rounded-xl btn-gradient-emerald text-xs font-semibold">
             Back to Workspace →
           </button>
-          <button id="hero-signin-btn" onclick="openAuthScreen('login')" class="px-3.5 py-2 rounded-xl glass-subcard text-slate-700 text-xs font-semibold">
+          <button id="hero-signin-btn" onclick="openAuthScreen('login')" class="px-4 py-2 rounded-xl btn-gradient text-xs font-semibold">
             Sign In
-          </button>
-          <button id="hero-signup-btn" onclick="openAuthScreen('register')" class="px-4 py-2 rounded-xl btn-gradient text-xs font-semibold">
-            Request Student Account
           </button>
         </div>
       </div>
@@ -344,17 +341,7 @@
           <p class="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl">
             <strong>ClubSync</strong> replaces scattered WhatsApp groups, paper attendance sheets, and unverifiable certificates with a unified, glassmorphic operating system that keeps students, club coordinators, faculty advisors, campus managers, and college admins in sync across every campus.
           </p>
-          <div class="flex flex-wrap items-center gap-3 pt-1">
-            <button onclick="openAuthScreen('login')" class="px-6 py-3 rounded-xl btn-gradient text-sm font-semibold">
-              Sign In to Workspace →
-            </button>
-            <button onclick="openAuthScreen('register')" class="px-6 py-3 rounded-xl glass-card text-slate-800 text-sm font-semibold">
-              Request Account Access
-            </button>
-            <a href="#public-verify-section" class="px-4 py-3 rounded-xl text-indigo-700 hover:bg-white/60 text-sm font-semibold transition">
-              Verify a Certificate
-            </a>
-          </div>
+
 
           <!-- Glass Key Pillars Pill Strip -->
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
@@ -546,25 +533,7 @@
       </div>
     </section>
 
-    <!-- Public Certificate Verifier on Landing Page -->
-    <section id="public-verify-section" class="max-w-7xl mx-auto px-4 sm:px-6 pb-16 w-full">
-      <div class="glass-card rounded-2xl p-6">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <span class="text-xs font-bold uppercase tracking-wider text-indigo-600">Public Verification Portal</span>
-            <h3 class="text-lg font-bold text-slate-900">Verify Any ClubSync Certificate or Transcript Instantly</h3>
-            <p class="text-xs text-slate-600">Recruiters and faculty can verify authenticity by serial number without logging in.</p>
-          </div>
-          <div class="flex gap-2 w-full md:w-96">
-            <input id="hero-verify-serial-input" type="text" placeholder="Enter Serial (e.g. MSOT-CERT-2026-0001)" class="flex-1 rounded-xl glass-input px-3 py-2 text-xs font-mono" />
-            <button onclick="verifyFromHero()" class="px-5 py-2 rounded-xl btn-gradient text-xs font-semibold shrink-0">
-              Verify
-            </button>
-          </div>
-        </div>
-        <div id="hero-verify-result" class="mt-3"></div>
-      </div>
-    </section>
+
   </div>
 
   <!-- ===================================================================== -->

@@ -108,9 +108,12 @@ function enterWorkspace() {
 }
 
 async function verifyFromHero() {
-  const serial = document.getElementById('hero-verify-serial-input').value.trim();
+  const input = document.getElementById('hero-verify-serial-input');
+  if (!input) return;
+  const serial = input.value.trim();
   if (!serial) return;
   const box = document.getElementById('hero-verify-result');
+  if (!box) return;
   try {
     const res = await apiFetch(`/api/verify/${encodeURIComponent(serial)}`);
     if (res.verified) {
