@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
-from .database import engine, Base, get_db, SessionLocal, get_database_info, upload_to_supabase_storage, DATA_DIR
+from .database import engine, Base, get_db, SessionLocal, get_database_info, upload_to_supabase_storage, DATA_DIR, DATABASE_URL
 from .models import (
     SystemConfig,
     Campus,
@@ -73,16 +73,22 @@ app.add_middleware(
 )
 
 
+_db_initialized = False
+
+
 def init_db_and_defaults():
-    Base.metadata.create_all(bind=engine)
+    global _db_initialized
+    if _db_initialized:
+        return
+    # On SQLite (local development), ensure tables are created; on Supabase PostgreSQL all tables & indexes are permanent
+    if DATABASE_URL.startswith("sqlite"):
+        Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         seed_database(db)
     finally:
         db.close()
-
-
-init_db_and_defaults()
+    _db_initialized = True
 
 
 @app.on_event("startup")
@@ -666,8 +672,8 @@ def list_clubs(
         q = q.filter(Club.campus_id == campus_id)
     clubs = q.order_by(Club.created_at.desc()).all()
 
-    campuses_map = {c.id: c.code for c in db.query(Campus).all()}
-    users_map = {u.id: u.full_name for u in db.query(User).all()}
+    campuses_map = {row[0]: row[1] for row in db.query(Campus.id, Campus.code).all()}
+    users_map = {row[0]: row[1] for row in db.query(User.id, User.full_name).all()}
 
     # Single-query batch fetch for all memberships of retrieved clubs
     club_ids = [cl.id for cl in clubs]
@@ -896,9 +902,12 @@ def list_enrolments(
     if status:
         q = q.filter(ClubMembership.status == status)
 
-    rows = q.order_by(ClubMembership.joined_at.desc()).all()
-    users_map = {u.id: u for u in db.query(User).all()}
-    clubs_map = {c.id: c.name for c in db.query(Club).all()}
+    student_ids = [r.student_id for r in rows]
+    users_tuple = db.query(User.id, User.full_name, User.roll_number).filter(User.id.in_(student_ids)).all() if student_ids else []
+    user_names = {u[0]: u[1] for u in users_tuple}
+    user_rolls = {u[0]: u[2] for u in users_tuple}
+    club_ids = [r.club_id for r in rows]
+    clubs_map = {row[0]: row[1] for row in db.query(Club.id, Club.name).filter(Club.id.in_(club_ids)).all()} if club_ids else {}
 
     return [
         {
@@ -906,8 +915,8 @@ def list_enrolments(
             "club_id": r.club_id,
             "club_name": clubs_map.get(r.club_id, ""),
             "student_id": r.student_id,
-            "student_name": users_map[r.student_id].full_name if r.student_id in users_map else "",
-            "roll_number": users_map[r.student_id].roll_number if r.student_id in users_map else "",
+            "student_name": user_names.get(r.student_id, ""),
+            "roll_number": user_rolls.get(r.student_id, ""),
             "tier": r.tier,
             "status": r.status,
             "joined_at": r.joined_at.isoformat() if r.joined_at else None,
@@ -949,35 +958,63 @@ def list_club_day_sessions(
         q = q.filter(ClubDaySession.club_id == club_id)
     sessions = q.order_by(ClubDaySession.scheduled_date.desc(), ClubDaySession.week_number.desc()).all()
 
-    clubs_map = {c.id: c for c in db.query(Club).all()}
-    campuses_map = {c.id: c for c in db.query(Campus).all()}
+    clubs_map = {
+        row[0]: {"name": row[1], "code": row[2], "campus_id": row[3]}
+        for row in db.query(Club.id, Club.name, Club.code, Club.campus_id).all()
+    }
+    campuses_map = {
+        row[0]: {"code": row[1], "lat": row[2], "lng": row[3]}
+        for row in db.query(Campus.id, Campus.code, Campus.lat, Campus.lng).all()
+    }
+
+    session_ids = [s.id for s in sessions]
+    if session_ids:
+        from sqlalchemy import func
+        att_counts = dict(
+            db.query(Attendance.session_id, func.count(Attendance.id))
+            .filter(Attendance.session_id.in_(session_ids))
+            .group_by(Attendance.session_id)
+            .all()
+        )
+        sub_counts = dict(
+            db.query(Submission.session_id, func.count(Submission.id))
+            .filter(Submission.session_id.in_(session_ids))
+            .group_by(Submission.session_id)
+            .all()
+        )
+        my_atts = {
+            a.session_id: a
+            for a in db.query(Attendance)
+            .filter(Attendance.session_id.in_(session_ids), Attendance.student_id == current_user.id)
+            .all()
+        }
+        my_subs = {
+            s.session_id: s
+            for s in db.query(Submission)
+            .filter(Submission.session_id.in_(session_ids), Submission.student_id == current_user.id)
+            .all()
+        }
+    else:
+        att_counts, sub_counts, my_atts, my_subs = {}, {}, {}, {}
 
     out = []
     for s in sessions:
         cl = clubs_map.get(s.club_id)
-        camp = campuses_map.get(cl.campus_id) if cl else None
-        att_count = db.query(Attendance).filter(Attendance.session_id == s.id).count()
-        sub_count = db.query(Submission).filter(Submission.session_id == s.id).count()
-        my_att = (
-            db.query(Attendance)
-            .filter(Attendance.session_id == s.id, Attendance.student_id == current_user.id)
-            .first()
-        )
-        my_sub = (
-            db.query(Submission)
-            .filter(Submission.session_id == s.id, Submission.student_id == current_user.id)
-            .first()
-        )
+        camp = campuses_map.get(cl["campus_id"]) if cl else None
+        att_count = att_counts.get(s.id, 0)
+        sub_count = sub_counts.get(s.id, 0)
+        my_att = my_atts.get(s.id)
+        my_sub = my_subs.get(s.id)
 
         out.append(
             {
                 "id": s.id,
                 "club_id": s.club_id,
-                "club_name": cl.name if cl else "",
-                "club_code": cl.code if cl else "",
-                "campus_code": camp.code if camp else "HI-Tech",
-                "campus_lat": camp.lat if camp else 17.4435,
-                "campus_lng": camp.lng if camp else 78.3772,
+                "club_name": cl["name"] if cl else "",
+                "club_code": cl["code"] if cl else "",
+                "campus_code": camp["code"] if camp else "HI-Tech",
+                "campus_lat": camp["lat"] if camp else 17.4435,
+                "campus_lng": camp["lng"] if camp else 78.3772,
                 "week_number": s.week_number,
                 "scheduled_date": s.scheduled_date,
                 "topic": s.topic,
@@ -1391,16 +1428,19 @@ def get_session_roster_and_submissions(
     if not sess:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    users_map = {u.id: u for u in db.query(User).all()}
     attendances = db.query(Attendance).filter(Attendance.session_id == session_id).all()
     submissions = db.query(Submission).filter(Submission.session_id == session_id).all()
+    st_ids = list({a.student_id for a in attendances} | {s.student_id for s in submissions})
+    users_tuple = db.query(User.id, User.full_name, User.roll_number).filter(User.id.in_(st_ids)).all() if st_ids else []
+    user_names = {u[0]: u[1] for u in users_tuple}
+    user_rolls = {u[0]: u[2] for u in users_tuple}
 
     att_list = [
         {
             "id": a.id,
             "student_id": a.student_id,
-            "student_name": users_map[a.student_id].full_name if a.student_id in users_map else a.student_id,
-            "roll_number": users_map[a.student_id].roll_number if a.student_id in users_map else "",
+            "student_name": user_names.get(a.student_id, a.student_id),
+            "roll_number": user_rolls.get(a.student_id, ""),
             "status": a.status,
             "method": a.method,
             "is_presenter": a.is_presenter,
@@ -1419,8 +1459,8 @@ def get_session_roster_and_submissions(
             {
                 "id": sub.id,
                 "student_id": sub.student_id,
-                "student_name": users_map[sub.student_id].full_name if sub.student_id in users_map else sub.student_id,
-                "roll_number": users_map[sub.student_id].roll_number if sub.student_id in users_map else "",
+                "student_name": user_names.get(sub.student_id, sub.student_id),
+                "roll_number": user_rolls.get(sub.student_id, ""),
                 "title": sub.title,
                 "deliverable_type": sub.deliverable_type,
                 "file_url": sub.file_url,
@@ -1586,12 +1626,25 @@ def list_events(
     current_user: User = Depends(get_current_user),
 ):
     events = db.query(Event).order_by(Event.start_date.asc()).all()
-    users_map = {u.id: u.full_name for u in db.query(User).all()}
+    event_ids = [ev.id for ev in events]
+    all_teams = db.query(EventTeam).filter(EventTeam.event_id.in_(event_ids)).all() if event_ids else []
+    all_regs = db.query(EventRegistration).filter(EventRegistration.event_id.in_(event_ids)).all() if event_ids else []
+
+    teams_by_event: Dict[str, list] = {}
+    for t in all_teams:
+        teams_by_event.setdefault(t.event_id, []).append(t)
+
+    regs_by_event: Dict[str, list] = {}
+    for r in all_regs:
+        regs_by_event.setdefault(r.event_id, []).append(r)
+
+    user_ids = list({t.leader_id for t in all_teams} | {r.student_id for r in all_regs})
+    users_map = {row[0]: row[1] for row in db.query(User.id, User.full_name).filter(User.id.in_(user_ids)).all()} if user_ids else {}
 
     out = []
     for ev in events:
-        teams = db.query(EventTeam).filter(EventTeam.event_id == ev.id).all()
-        regs = db.query(EventRegistration).filter(EventRegistration.event_id == ev.id).all()
+        teams = teams_by_event.get(ev.id, [])
+        regs = regs_by_event.get(ev.id, [])
         my_reg = next((r for r in regs if r.student_id == current_user.id), None)
 
         out.append(
@@ -2268,10 +2321,16 @@ def get_dashboard_analytics(
             }
         )
 
+    from sqlalchemy import func
+    sess_counts = dict(
+        db.query(ClubDaySession.club_id, func.count(ClubDaySession.id))
+        .group_by(ClubDaySession.club_id)
+        .all()
+    )
     inactive_clubs = []
     campuses_map = {c.id: c.code for c in campuses}
     for cl in clubs:
-        sess_count = db.query(ClubDaySession).filter(ClubDaySession.club_id == cl.id).count()
+        sess_count = sess_counts.get(cl.id, 0)
         if cl.status == "INACTIVE" or sess_count == 0:
             inactive_clubs.append(
                 {
@@ -2292,12 +2351,17 @@ def get_dashboard_analytics(
         if a.is_presenter:
             pres_by_student[a.student_id] = pres_by_student.get(a.student_id, 0) + 1
 
+    eval_by_submission = {
+        row[0]: row[1]
+        for row in db.query(Evaluation.submission_id, Evaluation.total_score).all()
+    }
     sub_by_student: Dict[str, int] = {}
     score_by_student: Dict[str, float] = {}
     for s in submissions:
         sub_by_student[s.student_id] = sub_by_student.get(s.student_id, 0) + 1
-        if s.evaluation:
-            score_by_student[s.student_id] = round(score_by_student.get(s.student_id, 0.0) + s.evaluation.total_score, 2)
+        eval_score = eval_by_submission.get(s.id)
+        if eval_score is not None:
+            score_by_student[s.student_id] = round(score_by_student.get(s.student_id, 0.0) + eval_score, 2)
 
     ev_by_student: Dict[str, int] = {}
     for r in event_regs:
@@ -2920,10 +2984,12 @@ def get_admin_pending_queue(
     current_user: User = Depends(get_current_user),
 ):
     """Unified inbox of every pending item across all campuses so Admins can act from one screen."""
-    users_map = {u.id: u for u in db.query(User).all()}
-    clubs_map = {c.id: c for c in db.query(Club).all()}
-    campuses_map = {c.id: c.code for c in db.query(Campus).all()}
-    events_map = {e.id: e for e in db.query(Event).all()}
+    campuses_map = {row[0]: row[1] for row in db.query(Campus.id, Campus.code).all()}
+    clubs_map = {row[0]: row[1] for row in db.query(Club.id, Club.name).all()}
+    events_map = {row[0]: row[1] for row in db.query(Event.id, Event.title).all()}
+    users_tuple = db.query(User.id, User.full_name, User.roll_number).all()
+    user_names = {u[0]: u[1] for u in users_tuple}
+    user_rolls = {u[0]: u[2] for u in users_tuple}
 
     pending_accounts = [
         {
@@ -2952,9 +3018,9 @@ def get_admin_pending_queue(
         {
             "id": m.id,
             "club_id": m.club_id,
-            "club_name": clubs_map[m.club_id].name if m.club_id in clubs_map else "",
-            "student_name": users_map[m.student_id].full_name if m.student_id in users_map else "",
-            "roll_number": users_map[m.student_id].roll_number if m.student_id in users_map else "",
+            "club_name": clubs_map.get(m.club_id, ""),
+            "student_name": user_names.get(m.student_id, ""),
+            "roll_number": user_rolls.get(m.student_id, ""),
             "tier": m.tier,
         }
         for m in db.query(ClubMembership).filter(ClubMembership.status == "PENDING").all()
@@ -2963,7 +3029,7 @@ def get_admin_pending_queue(
     pending_sessions = [
         {
             "id": s.id,
-            "club_name": clubs_map[s.club_id].name if s.club_id in clubs_map else "",
+            "club_name": clubs_map.get(s.club_id, ""),
             "week_number": s.week_number,
             "scheduled_date": s.scheduled_date,
             "topic": s.topic,
@@ -2975,7 +3041,7 @@ def get_admin_pending_queue(
     pending_budgets = [
         {
             "id": b.id,
-            "club_name": clubs_map[b.club_id].name if b.club_id in clubs_map else "",
+            "club_name": clubs_map.get(b.club_id, ""),
             "title": b.title,
             "amount_inr": b.amount_inr,
             "status": b.status,
@@ -2988,8 +3054,8 @@ def get_admin_pending_queue(
     pending_duty_leaves = [
         {
             "id": d.id,
-            "student_name": users_map[d.student_id].full_name if d.student_id in users_map else "",
-            "event_title": events_map[d.event_id].title if d.event_id in events_map else "",
+            "student_name": user_names.get(d.student_id, ""),
+            "event_title": events_map.get(d.event_id, ""),
             "leave_dates": d.leave_dates,
             "campus_code": campuses_map.get(d.campus_id, "HI-Tech"),
         }

@@ -47,6 +47,10 @@ class Campus(Base):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        Index("idx_users_campus_role", "campus_id", "role"),
+        Index("idx_users_status_role", "account_status", "role"),
+    )
 
     id = Column(String(36), primary_key=True, default=gen_uuid)
     email = Column(String(150), unique=True, nullable=False, index=True)
@@ -76,6 +80,9 @@ class User(Base):
 
 class Club(Base):
     __tablename__ = "clubs"
+    __table_args__ = (
+        Index("idx_clubs_campus_status", "campus_id", "status"),
+    )
 
     id = Column(String(36), primary_key=True, default=gen_uuid)
     campus_id = Column(String(36), ForeignKey("campuses.id"), nullable=False, index=True)
@@ -83,7 +90,7 @@ class Club(Base):
     name = Column(String(140), nullable=False)
     category = Column(String(60), nullable=False)
     description = Column(Text, nullable=False)
-    advisor_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    advisor_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     capacity = Column(Integer, default=60)
     meeting_rules = Column(String(255), default="Every Saturday, 09:30 AM - 11:30 AM (Club Day)")
     status = Column(String(30), default="ACTIVE", index=True)  # PENDING | ACTIVE | INACTIVE
@@ -99,12 +106,14 @@ class ClubMembership(Base):
     __tablename__ = "club_memberships"
     __table_args__ = (
         UniqueConstraint("club_id", "student_id", name="uq_club_student_membership"),
+        Index("idx_club_memberships_club_status", "club_id", "status"),
+        Index("idx_club_memberships_student_status", "student_id", "status"),
     )
 
     id = Column(String(36), primary_key=True, default=gen_uuid)
     club_id = Column(String(36), ForeignKey("clubs.id"), nullable=False, index=True)
     student_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    tier = Column(String(30), default="PRIMARY")  # PRIMARY | SECONDARY | COORDINATOR
+    tier = Column(String(30), default="PRIMARY", index=True)  # PRIMARY | SECONDARY | COORDINATOR
     status = Column(String(30), default="PENDING", index=True)  # PENDING | APPROVED | REJECTED
     approved_by_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     joined_at = Column(DateTime, default=datetime.utcnow)
@@ -115,6 +124,10 @@ class ClubMembership(Base):
 
 class ClubDaySession(Base):
     __tablename__ = "club_day_sessions"
+    __table_args__ = (
+        Index("idx_sessions_checkin_status", "checkin_status"),
+        Index("idx_sessions_club_date", "club_id", "scheduled_date"),
+    )
 
     id = Column(String(36), primary_key=True, default=gen_uuid)
     club_id = Column(String(36), ForeignKey("clubs.id"), nullable=False, index=True)
@@ -135,7 +148,7 @@ class ClubDaySession(Base):
 
     # Check-in window & rotating QR seed
     checkin_secret = Column(String(64), nullable=False)
-    checkin_status = Column(String(30), default="CLOSED")  # CLOSED | OPEN | COMPLETED
+    checkin_status = Column(String(30), default="CLOSED", index=True)  # CLOSED | OPEN | COMPLETED
     checkin_opens_at = Column(DateTime, nullable=True)
     checkin_late_after = Column(DateTime, nullable=True)
     checkin_closes_at = Column(DateTime, nullable=True)
@@ -154,14 +167,15 @@ class Attendance(Base):
     __table_args__ = (
         UniqueConstraint("session_id", "student_id", name="uq_session_student_attendance"),
         Index("idx_attendance_session_status", "session_id", "status"),
+        Index("idx_attendances_student_status", "student_id", "status"),
     )
 
     id = Column(String(36), primary_key=True, default=gen_uuid)
     session_id = Column(String(36), ForeignKey("club_day_sessions.id"), nullable=False, index=True)
     student_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    status = Column(String(30), default="PRESENT")  # PRESENT | LATE | ABSENT | EXCUSED
+    status = Column(String(30), default="PRESENT", index=True)  # PRESENT | LATE | ABSENT | EXCUSED
     method = Column(String(30), default="QR_SCAN")  # QR_SCAN | OTP_CODE | MANUAL_OVERRIDE
-    is_presenter = Column(Boolean, default=False)
+    is_presenter = Column(Boolean, default=False, index=True)
     activity_result = Column(String(120), nullable=True)  # e.g., "Best Presenter", "Top 3 Pitch"
     override_reason = Column(Text, nullable=True)
     overridden_by_id = Column(String(36), ForeignKey("users.id"), nullable=True)
@@ -178,6 +192,7 @@ class Submission(Base):
     __tablename__ = "submissions"
     __table_args__ = (
         UniqueConstraint("session_id", "student_id", name="uq_session_student_submission"),
+        Index("idx_submissions_student_session", "student_id", "session_id"),
     )
 
     id = Column(String(36), primary_key=True, default=gen_uuid)
@@ -201,7 +216,7 @@ class Evaluation(Base):
 
     id = Column(String(36), primary_key=True, default=gen_uuid)
     submission_id = Column(String(36), ForeignKey("submissions.id"), unique=True, nullable=False, index=True)
-    evaluator_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    evaluator_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     evaluator_role = Column(String(30), nullable=False)  # COORDINATOR | ADVISOR
     content_score = Column(Float, nullable=False)  # 0 to 10
     presentation_score = Column(Float, nullable=False)  # 0 to 10
@@ -219,19 +234,19 @@ class Event(Base):
 
     id = Column(String(36), primary_key=True, default=gen_uuid)
     campus_id = Column(String(36), ForeignKey("campuses.id"), nullable=True, index=True)  # NULL = Inter-Campus
-    code = Column(String(50), unique=True, nullable=False)
+    code = Column(String(50), unique=True, nullable=False, index=True)
     title = Column(String(160), nullable=False)  # Gambade, Hackathon, International Conference, Cross Road
     category = Column(String(50), nullable=False)  # GAMBADE | HACKATHON | CONFERENCE | CROSS_ROAD
     scope = Column(String(40), default="INTER_CAMPUS")  # CAMPUS | INTER_CAMPUS | INTER_COLLEGE
     description = Column(Text, nullable=False)
     venue = Column(String(150), nullable=False)
-    start_date = Column(String(30), nullable=False)
+    start_date = Column(String(30), nullable=False, index=True)
     end_date = Column(String(30), nullable=False)
     max_team_size = Column(Integer, default=4)
     capacity = Column(Integer, default=500)
     duty_leave_eligible = Column(Boolean, default=True)
     checkin_secret = Column(String(64), nullable=False)
-    status = Column(String(30), default="UPCOMING")  # UPCOMING | ONGOING | COMPLETED
+    status = Column(String(30), default="UPCOMING", index=True)  # UPCOMING | ONGOING | COMPLETED
     created_at = Column(DateTime, default=datetime.utcnow)
 
     teams = relationship("EventTeam", back_populates="event", cascade="all, delete-orphan")
@@ -248,7 +263,7 @@ class EventTeam(Base):
     event_id = Column(String(36), ForeignKey("events.id"), nullable=False, index=True)
     team_name = Column(String(120), nullable=False)
     invite_code = Column(String(20), unique=True, nullable=False, index=True)
-    leader_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    leader_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     project_title = Column(String(200), nullable=True)
     result_position = Column(String(50), nullable=True)  # WINNER | RUNNER_UP | FINALIST | PARTICIPANT
     score = Column(Float, nullable=True)
@@ -268,7 +283,7 @@ class EventRegistration(Base):
     event_id = Column(String(36), ForeignKey("events.id"), nullable=False, index=True)
     team_id = Column(String(36), ForeignKey("event_teams.id"), nullable=True, index=True)
     student_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    checked_in = Column(Boolean, default=False)
+    checked_in = Column(Boolean, default=False, index=True)
     checked_in_at = Column(DateTime, nullable=True)
     result_badge = Column(String(80), nullable=True)
     registered_at = Column(DateTime, default=datetime.utcnow)
@@ -288,7 +303,7 @@ class Certificate(Base):
     event_id = Column(String(36), ForeignKey("events.id"), nullable=True, index=True)
     session_id = Column(String(36), ForeignKey("club_day_sessions.id"), nullable=True)
     cert_type = Column(
-        String(40), nullable=False
+        String(40), nullable=False, index=True
     )  # PARTICIPATION | ACHIEVEMENT | EVENT_EXCELLENCE | TRANSCRIPT
     title = Column(String(200), nullable=False)
     citation = Column(Text, nullable=False)
@@ -313,13 +328,13 @@ class BudgetRequest(Base):
 
     id = Column(String(36), primary_key=True, default=gen_uuid)
     club_id = Column(String(36), ForeignKey("clubs.id"), nullable=False, index=True)
-    requested_by_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    requested_by_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     title = Column(String(160), nullable=False)
     category = Column(String(60), default="Equipment & Kits")  # Equipment, Refreshments, Prizes, Guest Speaker
     amount_inr = Column(Float, nullable=False)
     description = Column(Text, nullable=False)
     status = Column(
-        String(40), default="PENDING_ADVISOR"
+        String(40), default="PENDING_ADVISOR", index=True
     )  # PENDING_ADVISOR | PENDING_CAMPUS_MGR | APPROVED | REJECTED
     approval_notes = Column(Text, nullable=True)
     approved_by_id = Column(String(36), ForeignKey("users.id"), nullable=True)
@@ -336,7 +351,7 @@ class DutyLeaveRequest(Base):
     campus_id = Column(String(36), ForeignKey("campuses.id"), nullable=False, index=True)
     leave_dates = Column(String(100), nullable=False)
     reason = Column(Text, nullable=False)
-    status = Column(String(40), default="PENDING_CM_APPROVAL")  # PENDING_CM_APPROVAL | APPROVED | REJECTED
+    status = Column(String(40), default="PENDING_CM_APPROVAL", index=True)  # PENDING_CM_APPROVAL | APPROVED | REJECTED
     approved_by_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     approved_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -352,8 +367,8 @@ class MediaGalleryItem(Base):
     uploaded_by_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     caption = Column(String(250), nullable=False)
     media_url = Column(String(350), nullable=False)
-    tagged_student_id = Column(String(36), ForeignKey("users.id"), nullable=True)
-    student_consent = Column(Boolean, default=True)  # Consent control: student can opt-in/revoke visibility
+    tagged_student_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+    student_consent = Column(Boolean, default=True, index=True)  # Consent control: student can opt-in/revoke visibility
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -366,8 +381,8 @@ class ClubNews(Base):
     author_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     title = Column(String(200), nullable=False)
     content = Column(Text, nullable=False)
-    pinned = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    pinned = Column(Boolean, default=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     club = relationship("Club", foreign_keys=[club_id])
@@ -378,9 +393,9 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id = Column(String(36), primary_key=True, default=gen_uuid)
-    actor_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    actor_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     action = Column(String(80), nullable=False, index=True)
     entity_type = Column(String(50), nullable=False)
     entity_id = Column(String(60), nullable=True)
     details = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)

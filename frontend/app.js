@@ -174,6 +174,7 @@ function showAuthSuccess(msg) {
 }
 
 async function loadCampuses() {
+  if (campusesList.length > 0) return campusesList;
   campusesList = await apiFetch('/api/campuses');
   const selects = ['reg-campus', 'club-campus', 'adm-user-campus'];
   selects.forEach((id) => {
@@ -337,7 +338,12 @@ async function enterApp() {
   switchTab('dashboard');
 }
 
-async function refreshUsersAndClubsSelectors() {
+let _selectorsCacheTime = 0;
+async function refreshUsersAndClubsSelectors(force = false) {
+  const now = Date.now();
+  if (!force && allUsersList.length > 0 && (now - _selectorsCacheTime < 60000)) {
+    return;
+  }
   const [users, clubs, events] = await Promise.all([
     apiFetch('/api/users'),
     apiFetch('/api/clubs'),
@@ -346,6 +352,7 @@ async function refreshUsersAndClubsSelectors() {
   allUsersList = users;
   clubsList = clubs;
   eventsList = events;
+  _selectorsCacheTime = now;
 
   const approvedUsers = allUsersList.filter((u) => u.account_status === 'APPROVED');
   const advisors = approvedUsers.filter((u) => u.role === 'ADVISOR' || u.role === 'ADMIN' || u.role === 'CAMPUS_MGR');
@@ -400,10 +407,22 @@ async function refreshUsersAndClubsSelectors() {
   populateBatchCertTargets();
 }
 
-async function refreshPendingBadge() {
+let cachedPendingQueue = null;
+let cachedPendingQueueTime = 0;
+async function fetchPendingQueue(force = false) {
+  const now = Date.now();
+  if (!force && cachedPendingQueue && (now - cachedPendingQueueTime < 25000)) {
+    return cachedPendingQueue;
+  }
+  cachedPendingQueue = await apiFetch('/api/admin/pending-queue');
+  cachedPendingQueueTime = now;
+  return cachedPendingQueue;
+}
+
+async function refreshPendingBadge(force = false) {
   if (!currentUser || !['ADMIN', 'CAMPUS_MGR', 'ADVISOR'].includes(currentUser.role)) return;
   try {
-    const q = await apiFetch('/api/admin/pending-queue');
+    const q = await fetchPendingQueue(force);
     const badge = document.getElementById('admin-pending-badge');
     if (badge) {
       if (q.total_pending > 0) {
@@ -538,7 +557,7 @@ async function loadDashboard() {
   const listEl = document.getElementById('dash-pending-students-list');
   if (banner && (currentUser.role === 'CAMPUS_MGR' || currentUser.role === 'ADMIN')) {
     try {
-      const queue = await apiFetch('/api/admin/pending-queue');
+      const queue = await fetchPendingQueue();
       const pendingStudents = queue.pending_accounts || [];
       if (pendingStudents.length > 0) {
         if (countEl) countEl.textContent = pendingStudents.length;
@@ -1756,7 +1775,7 @@ function populateBatchCertTargets() {
 async function loadAdminCenter() {
   await refreshUsersAndClubsSelectors();
   const [queue, sysStatus, auditLogs] = await Promise.all([
-    apiFetch('/api/admin/pending-queue'),
+    fetchPendingQueue(true),
     apiFetch('/api/system/status'),
     apiFetch('/api/audit-logs?limit=35'),
   ]);
@@ -2266,15 +2285,21 @@ async function deleteClubNews(newsId) {
 // ============================================================================
 
 window.addEventListener('DOMContentLoaded', async () => {
-  await loadCampuses();
   if (authToken) {
+    document.getElementById('hero-screen')?.classList.add('hidden');
     try {
-      currentUser = await apiFetch('/api/auth/me');
+      const [_, user] = await Promise.all([
+        loadCampuses(),
+        apiFetch('/api/auth/me'),
+      ]);
+      currentUser = user;
       await enterApp();
     } catch (_) {
       handleLogout();
+      showHeroScreen();
     }
   } else {
+    loadCampuses();
     showHeroScreen();
   }
 });

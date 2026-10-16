@@ -53,20 +53,20 @@
 
     .glass-card {
       position: relative;
-      background: rgba(255, 255, 255, 0.48);
-      backdrop-filter: blur(16px) saturate(190%);
-      -webkit-backdrop-filter: blur(16px) saturate(190%);
+      background: rgba(255, 255, 255, 0.52);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       border: 1px solid rgba(255, 255, 255, 0.75);
       box-shadow:
-        0 8px 32px 0 rgba(31, 38, 135, 0.06),
-        0 2px 6px 0 rgba(99, 102, 241, 0.03),
+        0 8px 30px 0 rgba(31, 38, 135, 0.05),
+        0 2px 6px 0 rgba(99, 102, 241, 0.02),
         inset 0 1px 1px 0 rgba(255, 255, 255, 0.9);
-      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
-      transform: translateZ(0);
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+      contain: layout style;
     }
 
     .glass-card:hover {
-      background: rgba(255, 255, 255, 0.64);
+      background: rgba(255, 255, 255, 0.68);
       transform: translateY(-2px);
       border-color: rgba(99, 102, 241, 0.45);
       box-shadow: 0 14px 34px -8px rgba(37, 99, 235, 0.12), inset 0 1px 1px 0 rgba(255, 255, 255, 0.95);
@@ -74,21 +74,20 @@
 
     .glass-dark {
       background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       border: 1px solid rgba(148, 163, 184, 0.25);
       box-shadow: 0 16px 36px -10px rgba(15, 23, 42, 0.3);
-      transform: translateZ(0);
     }
 
     .glass-subcard {
-      background: rgba(255, 255, 255, 0.42);
-      backdrop-filter: blur(12px) saturate(170%);
-      -webkit-backdrop-filter: blur(12px) saturate(170%);
+      background: rgba(255, 255, 255, 0.44);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       border: 1px solid rgba(255, 255, 255, 0.65);
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02), inset 0 1px 1px rgba(255, 255, 255, 0.7);
       transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
-      transform: translateZ(0);
+      contain: layout style;
     }
     .glass-subcard:hover {
       background: rgba(255, 255, 255, 0.65);
@@ -96,9 +95,9 @@
     }
 
     .glass-modal {
-      background: linear-gradient(145deg, rgba(255, 255, 255, 0.82) 0%, rgba(248, 250, 252, 0.70) 100%);
-      backdrop-filter: blur(24px) saturate(190%);
-      -webkit-backdrop-filter: blur(24px) saturate(190%);
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.88) 0%, rgba(248, 250, 252, 0.78) 100%);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
       border: 1px solid rgba(255, 255, 255, 0.85);
       box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.28), inset 0 1px 1px rgba(255, 255, 255, 0.9);
       animation: modalPop 0.26s cubic-bezier(0.22, 1, 0.36, 1);
@@ -122,12 +121,10 @@
     /* DYNAMIC GRADIENT TEXT, BUTTONS & MOTION GRAPHICS                      */
     /* ===================================================================== */
     .gradient-text {
-      background: linear-gradient(90deg, #2563eb, #7c3aed, #db2777, #0891b2, #2563eb);
-      background-size: 250% auto;
+      background: linear-gradient(135deg, #2563eb 0%, #7c3aed 50%, #db2777 100%);
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
-      animation: gradientTextFlow 8s linear infinite;
     }
 
     .btn-gradient {
@@ -162,10 +159,6 @@
     }
 
     /* Motion Graphic Keyframes */
-    @keyframes gradientTextFlow {
-      0% { background-position: 0% center; }
-      100% { background-position: 250% center; }
-    }
     @keyframes floatCard {
       0%, 100% { transform: translateY(0px); }
       50% { transform: translateY(-7px); }

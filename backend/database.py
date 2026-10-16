@@ -88,21 +88,15 @@ if DATABASE_URL.startswith("sqlite"):
         cursor.execute("PRAGMA foreign_keys=ON;")
         cursor.close()
 else:
-    # Supabase PostgreSQL connection pool (NullPool on Vercel Serverless to prevent dropped connections)
-    if os.environ.get("VERCEL"):
-        engine = create_engine(
-            DATABASE_URL,
-            poolclass=NullPool,
-            connect_args={"sslmode": os.environ.get("PGSSLMODE", "require")},
-        )
-    else:
-        engine = create_engine(
-            DATABASE_URL,
-            pool_size=20,
-            max_overflow=40,
-            pool_pre_ping=True,
-            connect_args={"sslmode": os.environ.get("PGSSLMODE", "require")},
-        )
+    # Supabase PostgreSQL connection pool with connection reuse and health checks
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=10,
+        max_overflow=20,
+        pool_recycle=300,
+        pool_pre_ping=True,
+        connect_args={"sslmode": os.environ.get("PGSSLMODE", "require")},
+    )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
