@@ -125,6 +125,7 @@ async function verifyFromHero() {
 function switchAuthMode(mode) {
   const loginForm = document.getElementById('login-form');
   const regForm = document.getElementById('register-form');
+  const forgotForm = document.getElementById('forgot-form');
   const tabLogin = document.getElementById('auth-tab-login');
   const tabReg = document.getElementById('auth-tab-register');
   document.getElementById('auth-error').classList.add('hidden');
@@ -133,14 +134,31 @@ function switchAuthMode(mode) {
   if (mode === 'login') {
     loginForm.classList.remove('hidden');
     regForm.classList.add('hidden');
+    if (forgotForm) forgotForm.classList.add('hidden');
     tabLogin.className = 'py-2 rounded-md bg-white text-slate-900 shadow-sm';
     tabReg.className = 'py-2 rounded-md text-slate-600 hover:text-slate-900';
-  } else {
+  } else if (mode === 'register') {
     loginForm.classList.add('hidden');
     regForm.classList.remove('hidden');
+    if (forgotForm) forgotForm.classList.add('hidden');
     tabReg.className = 'py-2 rounded-md bg-white text-slate-900 shadow-sm';
     tabLogin.className = 'py-2 rounded-md text-slate-600 hover:text-slate-900';
     updateRegRoleNotice();
+  } else if (mode === 'forgot') {
+    loginForm.classList.add('hidden');
+    regForm.classList.add('hidden');
+    if (forgotForm) {
+      forgotForm.classList.remove('hidden');
+      document.getElementById('forgot-step-1')?.classList.remove('hidden');
+      document.getElementById('forgot-step-2')?.classList.add('hidden');
+      const loginEmail = document.getElementById('login-email')?.value.trim();
+      const forgotEmailInput = document.getElementById('forgot-email');
+      if (loginEmail && forgotEmailInput && !forgotEmailInput.value) {
+        forgotEmailInput.value = loginEmail;
+      }
+    }
+    tabLogin.className = 'py-2 rounded-md text-slate-600 hover:text-slate-900';
+    tabReg.className = 'py-2 rounded-md text-slate-600 hover:text-slate-900';
   }
 }
 
@@ -149,13 +167,105 @@ function updateRegRoleNotice() {
   const notice = document.getElementById('reg-approval-notice');
   const btn = document.getElementById('reg-submit-btn');
   if (!notice || !btn) return;
-  if (role === 'STUDENT' || role === 'PRESIDENT') {
-    notice.classList.remove('hidden');
-    notice.innerHTML = `<strong>Note for ${role === 'PRESIDENT' ? 'Club Presidents' : 'Students'}:</strong> Submitting this form sends an account request to your Campus Manager or Admin. You can sign in once permitted.`;
-    btn.textContent = role === 'PRESIDENT' ? 'Submit Club President Request' : 'Submit Student Account Request';
-  } else {
-    notice.classList.add('hidden');
-    btn.textContent = 'Create Account & Sign In';
+  const roleLabels = {
+    STUDENT: 'Student',
+    PRESIDENT: 'Club President',
+    ADVISOR: 'Faculty Advisor',
+    CAMPUS_MGR: 'Campus Manager',
+    ADMIN: 'System Admin',
+  };
+  const label = roleLabels[role] || role;
+  notice.classList.remove('hidden');
+  notice.innerHTML = `<strong>Campus Manager Approval Required:</strong> All <em>${label}</em> accounts must be reviewed and permitted by your Campus Manager before you can sign in.`;
+  btn.textContent = `Submit ${label} Account Request`;
+}
+
+async function handleSendResetOtp() {
+  const emailInput = document.getElementById('forgot-email');
+  const email = emailInput ? emailInput.value.trim() : '';
+  if (!email) {
+    showAuthError('Please enter your email address to receive the verification OTP.');
+    return;
+  }
+  const btn = document.getElementById('forgot-send-btn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Sending Code...';
+  }
+  try {
+    const res = await apiFetch('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+    showAuthSuccess(res.message || 'Verification code sent! Check your inbox.');
+    document.getElementById('forgot-step-1')?.classList.add('hidden');
+    document.getElementById('forgot-step-2')?.classList.remove('hidden');
+    const otpInput = document.getElementById('forgot-otp');
+    if (otpInput) {
+      otpInput.value = '';
+      otpInput.focus();
+    }
+  } catch (err) {
+    showAuthError(err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Send 6-Digit Code';
+    }
+  }
+}
+
+async function handleResendResetOtp() {
+  document.getElementById('forgot-step-2')?.classList.add('hidden');
+  document.getElementById('forgot-step-1')?.classList.remove('hidden');
+  await handleSendResetOtp();
+}
+
+async function handleCompleteReset() {
+  const email = document.getElementById('forgot-email')?.value.trim();
+  const otp = document.getElementById('forgot-otp')?.value.trim();
+  const newPassword = document.getElementById('forgot-new-password')?.value;
+  const confirmPassword = document.getElementById('forgot-confirm-password')?.value;
+
+  if (!otp || otp.length < 6) {
+    showAuthError('Please enter the 6-digit verification code sent to your email.');
+    return;
+  }
+  if (!newPassword || newPassword.length < 4) {
+    showAuthError('New password must be at least 4 characters.');
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    showAuthError('Passwords do not match. Please re-enter.');
+    return;
+  }
+
+  const btn = document.getElementById('forgot-reset-btn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Resetting Password...';
+  }
+
+  try {
+    const res = await apiFetch('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        email,
+        otp,
+        new_password: newPassword,
+      }),
+    });
+    switchAuthMode('login');
+    const loginEmailInput = document.getElementById('login-email');
+    if (loginEmailInput) loginEmailInput.value = email;
+    showAuthSuccess(res.message || 'Password reset successfully! You can now sign in.');
+  } catch (err) {
+    showAuthError(err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Reset Password & Sign In';
+    }
   }
 }
 

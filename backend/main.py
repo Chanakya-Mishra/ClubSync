@@ -37,6 +37,7 @@ from .models import (
     MediaGalleryItem,
     ClubNews,
     AuditLog,
+    PasswordResetOTP,
 )
 from .services.qr_engine import (
     generate_qr_payload,
@@ -47,6 +48,12 @@ from .services.pdf_engine import (
     CERT_DIR,
     generate_certificate_pdf,
     generate_transcript_pdf,
+)
+from .services.email_engine import (
+    send_password_reset_otp_email,
+    send_account_approved_email,
+    send_session_announced_email,
+    send_club_news_email,
 )
 from .seed import seed_database
 
@@ -449,6 +456,16 @@ class ClubNewsCreateRequest(BaseModel):
     pinned: bool = False
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    otp: str
+    new_password: str
+
+
 # ============================================================================
 # Authentication & User Management Endpoints
 # ============================================================================
@@ -488,8 +505,8 @@ def register_user(req: RegisterRequest, db: Session = Depends(get_db)):
     campus_id = req.campus_id or (default_campus.id if default_campus else None)
 
     role_upper = req.role.upper()
-    # Student and President self-registration creates a PENDING_APPROVAL account requiring Campus Mgr / Admin approval
-    initial_account_status = "PENDING_APPROVAL" if role_upper in ("STUDENT", "PRESIDENT", "COORDINATOR") else "APPROVED"
+    # Mandatory requirement: Every account type (Student, President, Faculty Advisor) requires Campus Manager permission
+    initial_account_status = "PENDING_APPROVAL"
 
     user = User(
         email=email_clean,
@@ -505,34 +522,25 @@ def register_user(req: RegisterRequest, db: Session = Depends(get_db)):
     db.add(user)
     db.flush()
 
-    if initial_account_status == "PENDING_APPROVAL":
-        db.add(
-            AuditLog(
-                actor_id=user.id,
-                action="STUDENT_ACCOUNT_REQUESTED",
-                entity_type="USER",
-                entity_id=user.id,
-                details=f"Student {user.full_name} ({user.email}) requested an account and is awaiting Admin approval.",
-            )
+    db.add(
+        AuditLog(
+            actor_id=user.id,
+            action="ACCOUNT_REQUESTED",
+            entity_type="USER",
+            entity_id=user.id,
+            details=f"{user.role} account requested by {user.full_name} ({user.email}). Awaiting Campus Manager approval.",
         )
+    )
 
     db.commit()
     db.refresh(user)
 
     campuses_map = {c.id: c.code for c in db.query(Campus).all()}
-    if initial_account_status != "APPROVED":
-        return {
-            "pending_approval": True,
-            "token": None,
-            "user": serialize_user(user, campuses_map),
-            "message": "Your student account request has been submitted! You can sign in once the Admin permits your account.",
-        }
-
-    token = create_access_token(user)
     return {
-        "pending_approval": False,
-        "token": token,
+        "pending_approval": True,
+        "token": None,
         "user": serialize_user(user, campuses_map),
+        "message": "Your account request has been submitted! Every account requires verification and permission from the Campus Manager before access is granted. You will receive an email once approved.",
     }
 
 
@@ -547,12 +555,12 @@ def login_user(req: LoginRequest, db: Session = Depends(get_db)):
     if acc_status == "PENDING_APPROVAL":
         raise HTTPException(
             status_code=403,
-            detail="Your student account is awaiting Admin permission. You will be able to sign in once the Admin approves your request.",
+            detail="Your account is awaiting approval from the Campus Manager. You will receive an email notification once your access is permitted.",
         )
     if acc_status == "REJECTED":
         raise HTTPException(
             status_code=403,
-            detail="Your account request was declined by the Administrator.",
+            detail="Your account request was declined by the Campus Manager.",
         )
 
     campuses_map = {c.id: c.code for c in db.query(Campus).all()}
@@ -560,6 +568,87 @@ def login_user(req: LoginRequest, db: Session = Depends(get_db)):
     return {
         "token": token,
         "user": serialize_user(user, campuses_map),
+    }
+
+
+@app.post("/api/auth/forgot-password")
+def request_password_reset(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    email_clean = req.email.strip().lower()
+    if not email_clean or "@" not in email_clean:
+        raise HTTPException(status_code=400, detail="Please enter a valid email address.")
+
+    user = db.query(User).filter(User.email == email_clean).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No registered account found with this email address.")
+
+    # Invalidate previous unused OTPs for this email
+    db.query(PasswordResetOTP).filter(
+        PasswordResetOTP.email == email_clean,
+        PasswordResetOTP.used == False
+    ).update({"used": True})
+
+    # Generate cryptographically secure 6-digit OTP
+    otp_code = f"{secrets.randbelow(900000) + 100000}"
+    expires_at = datetime.utcnow() + timedelta(minutes=15)
+
+    otp_record = PasswordResetOTP(
+        email=email_clean,
+        otp=otp_code,
+        expires_at=expires_at,
+        used=False,
+    )
+    db.add(otp_record)
+    db.commit()
+
+    # Dispatch email in background thread
+    send_password_reset_otp_email(email_clean, user.full_name, otp_code)
+
+    return {
+        "success": True,
+        "message": f"A 6-digit verification code has been sent to {email_clean}. It is valid for 15 minutes.",
+    }
+
+
+@app.post("/api/auth/reset-password")
+def complete_password_reset(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+    email_clean = req.email.strip().lower()
+    otp_clean = req.otp.strip()
+    if not email_clean or not otp_clean:
+        raise HTTPException(status_code=400, detail="Email and verification code are required.")
+
+    if not req.new_password or len(req.new_password) < 4:
+        raise HTTPException(status_code=400, detail="New password must be at least 4 characters.")
+
+    now = datetime.utcnow()
+    record = (
+        db.query(PasswordResetOTP)
+        .filter(
+            PasswordResetOTP.email == email_clean,
+            PasswordResetOTP.otp == otp_clean,
+            PasswordResetOTP.used == False,
+            PasswordResetOTP.expires_at >= now,
+        )
+        .order_by(PasswordResetOTP.created_at.desc())
+        .first()
+    )
+
+    if not record:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid or expired verification code. Please request a new code.",
+        )
+
+    user = db.query(User).filter(User.email == email_clean).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Account not found.")
+
+    user.password_hash = hash_password(req.new_password)
+    record.used = True
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "Password reset successfully! You can now sign in with your new password.",
     }
 
 
@@ -1113,7 +1202,30 @@ def announce_session(
     verify_coordinator_club_access(db, current_user, sess.club_id)
     sess.announced_at = datetime.utcnow()
     db.commit()
-    return {"id": sess.id, "announced": True, "message": "Session announced to club members."}
+
+    # Dispatch email notification to all approved club members
+    club = db.query(Club).filter(Club.id == sess.club_id).first()
+    memberships = db.query(ClubMembership).filter(
+        ClubMembership.club_id == sess.club_id,
+        ClubMembership.status == "APPROVED"
+    ).all()
+    st_ids = [m.student_id for m in memberships]
+    if st_ids:
+        member_emails = [
+            row[0]
+            for row in db.query(User.email).filter(User.id.in_(st_ids), User.email != "").all()
+        ]
+        send_session_announced_email(
+            member_emails,
+            club.name if club else "Club",
+            sess.topic,
+            sess.scheduled_date,
+            sess.venue,
+            sess.format,
+            sess.deliverable_desc or "Saturday Club Day Session Activity",
+        )
+
+    return {"id": sess.id, "announced": True, "message": "Session announced and email notifications dispatched to club members."}
 
 
 @app.post("/api/sessions/{session_id}/checkin-window")
@@ -2839,10 +2951,24 @@ def create_club_news(
     )
     db.commit()
     db.refresh(news)
+
+    # Dispatch email notification to all approved club members
+    memberships = db.query(ClubMembership).filter(
+        ClubMembership.club_id == req.club_id,
+        ClubMembership.status == "APPROVED"
+    ).all()
+    st_ids = [m.student_id for m in memberships]
+    if st_ids:
+        member_emails = [
+            row[0]
+            for row in db.query(User.email).filter(User.id.in_(st_ids), User.email != "").all()
+        ]
+        send_club_news_email(member_emails, club.name, news.title, news.content, current_user.full_name)
+
     return {
         "id": news.id,
         "title": news.title,
-        "message": f"News broadcasted successfully for {club.name}!",
+        "message": f"News broadcasted and emailed to members of {club.name}!",
     }
 
 
@@ -3092,11 +3218,13 @@ def admin_bulk_approve(
     cat = category.upper()
     counts = {"accounts": 0, "clubs": 0, "enrolments": 0, "sessions": 0, "budgets": 0, "duty_leaves": 0}
     now = datetime.utcnow()
+    approved_users_for_email = []
 
     if cat in ("ALL", "ACCOUNTS") and current_user.role in ("ADMIN", "CAMPUS_MGR"):
         for u in db.query(User).filter(User.account_status == "PENDING_APPROVAL").all():
             u.account_status = "APPROVED"
             counts["accounts"] += 1
+            approved_users_for_email.append((u.email, u.full_name, u.role, u.campus_id))
 
     if cat in ("ALL", "CLUBS") and current_user.role in ("ADMIN", "CAMPUS_MGR"):
         for c in db.query(Club).filter(Club.status == "PENDING").all():
@@ -3142,6 +3270,18 @@ def admin_bulk_approve(
             )
         )
     db.commit()
+
+    if approved_users_for_email:
+        campuses_dict = {c.id: c.name for c in db.query(Campus).all()}
+        for email, full_name, role, cid in approved_users_for_email:
+            cname = campuses_dict.get(cid, "Your Campus")
+            send_account_approved_email(
+                to_email=email,
+                full_name=full_name,
+                role=role,
+                campus_name=cname,
+            )
+
     return {"approved_counts": counts, "total_approved": total_approved, "message": f"Approved {total_approved} pending item(s)."}
 
 
@@ -3159,10 +3299,14 @@ def admin_update_user(
     if not u:
         raise HTTPException(status_code=404, detail="User not found")
 
+    status_changed_to_approved = False
     if req.role:
         u.role = req.role.upper()
     if req.account_status:
-        u.account_status = req.account_status.upper()
+        new_status = req.account_status.upper()
+        if new_status == "APPROVED" and u.account_status != "APPROVED":
+            status_changed_to_approved = True
+        u.account_status = new_status
     if req.campus_id is not None:
         u.campus_id = req.campus_id or None
     if req.roll_number is not None:
@@ -3182,6 +3326,17 @@ def admin_update_user(
         )
     )
     db.commit()
+
+    if status_changed_to_approved:
+        campus = db.query(Campus).filter(Campus.id == u.campus_id).first() if u.campus_id else None
+        campus_name = campus.name if campus else "Your Campus"
+        send_account_approved_email(
+            to_email=u.email,
+            full_name=u.full_name,
+            role=u.role,
+            campus_name=campus_name,
+        )
+
     campuses_map = {c.id: c.code for c in db.query(Campus).all()}
     return serialize_user(u, campuses_map)
 

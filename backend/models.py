@@ -399,3 +399,17 @@ class AuditLog(Base):
     entity_id = Column(String(60), nullable=True)
     details = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class PasswordResetOTP(Base):
+    __tablename__ = "password_reset_otps"
+    __table_args__ = (
+        Index("idx_pwd_reset_email_otp", "email", "otp"),
+    )
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    email = Column(String(150), nullable=False, index=True)
+    otp = Column(String(10), nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    used = Column(Boolean, default=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
