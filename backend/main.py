@@ -577,9 +577,12 @@ def request_password_reset(req: ForgotPasswordRequest, db: Session = Depends(get
     if not email_clean or "@" not in email_clean:
         raise HTTPException(status_code=400, detail="Please enter a valid email address.")
 
-    user = db.query(User).filter(User.email == email_clean).first()
+    user = db.query(User).filter(User.email.ilike(email_clean)).first()
     if not user:
-        raise HTTPException(status_code=404, detail="No registered account found with this email address.")
+        raise HTTPException(
+            status_code=404,
+            detail=f"No registered account found with email '{email_clean}'. Please check for typos or submit an account request.",
+        )
 
     # Invalidate previous unused OTPs for this email
     db.query(PasswordResetOTP).filter(
@@ -3593,6 +3596,29 @@ def batch_issue_certificates(
 # ============================================================================
 # Serve Uploaded Files & Frontend App
 # ============================================================================
+
+@app.post("/api/admin/smtp-test")
+def admin_smtp_test(
+    recipient: Optional[str] = Query(default=None),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role not in ("ADMIN", "CAMPUS_MGR"):
+        raise HTTPException(status_code=403, detail="Only Admin or Campus Manager can perform SMTP testing.")
+    from .services.email_engine import send_email_sync, _get_credentials
+    target = recipient.strip() if recipient else current_user.email
+    user, pwd = _get_credentials()
+    success = send_email_sync(
+        to_emails=[target],
+        subject="[ClubSync] Admin SMTP Diagnostic Test",
+        html_content=f"<p>This diagnostic test verifies that the ClubSync email engine is successfully connected via Google SMTP (User: {user}).</p>",
+    )
+    return {
+        "success": success,
+        "sender": user,
+        "target": target,
+        "message": f"SMTP test {'delivered successfully' if success else 'failed to send'} to {target}."
+    }
+
 
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 if os.path.exists(FRONTEND_DIR):

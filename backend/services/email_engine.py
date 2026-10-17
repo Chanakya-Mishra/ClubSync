@@ -13,74 +13,123 @@ try:
 except Exception:
     pass
 
+DEFAULT_GMAIL_USER = "info.clubsync@gmail.com"
+DEFAULT_GMAIL_APP_PWD = "weftjnainoemxtrj"
+
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip()
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "465"))
 
 
 def _get_credentials():
-    user = os.environ.get("GMAIL_USER", "").strip() or os.environ.get("SMTP_USER", "").strip() or os.environ.get("SMTP_EMAIL", "").strip()
-    pwd = os.environ.get("GMAIL_APP_PASSWORD", "").strip() or os.environ.get("SMTP_PASSWORD", "").strip()
-    # Strip spaces from 16-character Google App Passwords (e.g. "abcd efgh ijkl mnop")
+    user = (
+        os.environ.get("GMAIL_USER", "").strip()
+        or os.environ.get("SMTP_USER", "").strip()
+        or os.environ.get("SMTP_EMAIL", "").strip()
+        or DEFAULT_GMAIL_USER
+    )
+    pwd = (
+        os.environ.get("GMAIL_APP_PASSWORD", "").strip()
+        or os.environ.get("SMTP_PASSWORD", "").strip()
+        or DEFAULT_GMAIL_APP_PWD
+    )
     if pwd:
         pwd = pwd.replace(" ", "")
     return user, pwd
 
 
-def send_email_sync(to_emails: List[str], subject: str, html_content: str, text_content: Optional[str] = None) -> bool:
+def send_email_sync(
+    to_emails: List[str],
+    subject: str,
+    html_content: str,
+    text_content: Optional[str] = None,
+    is_bulk: bool = False,
+    club_name_header: Optional[str] = None,
+) -> bool:
     """
-    Sends an email to one or multiple recipients using Google SMTP (or configured SMTP server).
-    If GMAIL_USER / GMAIL_APP_PASSWORD are not yet set, logs gracefully in dry-run mode.
+    Sends an email to one or multiple recipients using Google SMTP.
+    Uses direct SSL (port 465) with automatic fallback to STARTTLS (port 587).
+    Works reliably in both local and serverless (Vercel) environments.
     """
     if not to_emails:
         return False
 
-    # Filter out empty or invalid emails
     valid_recipients = [e.strip() for e in to_emails if e and "@" in e]
     if not valid_recipients:
         return False
 
     user, pwd = _get_credentials()
     if not user or not pwd:
-        print(f"[EmailEngine - Dry Run] (Configure GMAIL_USER & GMAIL_APP_PASSWORD in .env)")
-        print(f" -> Recipients: {', '.join(valid_recipients[:3])}{' (+' + str(len(valid_recipients)-3) + ' more)' if len(valid_recipients) > 3 else ''}")
-        print(f" -> Subject: {subject}")
+        print(f"[EmailEngine - Dry Run] No SMTP credentials configured.")
         return False
 
+    sender_name = os.environ.get("EMAIL_SENDER_NAME", "ClubSync Multi-Campus Platform")
+    from_header = f"{sender_name} <{user}>"
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = from_header
+
+    if is_bulk or len(valid_recipients) > 1:
+        # Protect recipient privacy (Bcc mode for club announcements)
+        recipient_label = f"{club_name_header} Members" if club_name_header else "Club Members"
+        msg["To"] = f"{recipient_label} <{user}>"
+    else:
+        msg["To"] = valid_recipients[0]
+
+    if text_content:
+        msg.attach(MIMEText(text_content, "plain", "utf-8"))
+    msg.attach(MIMEText(html_content, "html", "utf-8"))
+    msg_str = msg.as_string()
+
+    # Try Port 465 (SSL) first — fastest and works through firewalls/serverless
     try:
-        sender_name = os.environ.get("EMAIL_SENDER_NAME", "ClubSync Multi-Campus OS")
-        from_header = f"{sender_name} <{user}>"
+        with smtplib.SMTP_SSL(SMTP_HOST, 465, timeout=12) as server:
+            server.login(user, pwd)
+            server.sendmail(user, valid_recipients, msg_str)
+        print(f"[EmailEngine - SSL 465] Dispatched email to {len(valid_recipients)} recipient(s): '{subject}'")
+        return True
+    except Exception as exc_ssl:
+        print(f"[EmailEngine] Port 465 attempt encountered ({exc_ssl}), trying Port 587 STARTTLS...")
 
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = from_header
-        msg["To"] = ", ".join(valid_recipients)
-
-        if text_content:
-            msg.attach(MIMEText(text_content, "plain", "utf-8"))
-        msg.attach(MIMEText(html_content, "html", "utf-8"))
-
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as server:
+    # Fallback to Port 587 (STARTTLS)
+    try:
+        with smtplib.SMTP(SMTP_HOST, 587, timeout=12) as server:
             server.ehlo()
             server.starttls()
             server.ehlo()
             server.login(user, pwd)
-            server.sendmail(user, valid_recipients, msg.as_string())
-
-        print(f"[EmailEngine] Dispatched email to {len(valid_recipients)} recipient(s): '{subject}'")
+            server.sendmail(user, valid_recipients, msg_str)
+        print(f"[EmailEngine - STARTTLS 587] Dispatched email to {len(valid_recipients)} recipient(s): '{subject}'")
         return True
-    except Exception as exc:
-        print(f"[EmailEngine Error] Failed sending email '{subject}' to {valid_recipients}: {exc}")
+    except Exception as exc_tls:
+        print(f"[EmailEngine Error] Both 465 and 587 failed for '{subject}' to {valid_recipients}: {exc_tls}")
         return False
 
 
-def send_email_in_background(to_emails: List[str], subject: str, html_content: str, text_content: Optional[str] = None):
-    """Fires the email sending logic inside a background thread to prevent blocking web requests."""
-    t = threading.Thread(
-        target=send_email_sync,
-        args=(to_emails, subject, html_content, text_content),
-        daemon=True,
-    )
-    t.start()
+def send_email_in_background(
+    to_emails: List[str],
+    subject: str,
+    html_content: str,
+    text_content: Optional[str] = None,
+    is_bulk: bool = False,
+    club_name_header: Optional[str] = None,
+):
+    """
+    In serverless environments (Vercel), background threads are terminated when HTTP response finishes.
+    In Vercel, we dispatch synchronously (taking ~1.5s).
+    In local/persistent server environments, we run with a short thread join so responses aren't blocked.
+    """
+    if os.environ.get("VERCEL"):
+        send_email_sync(to_emails, subject, html_content, text_content, is_bulk, club_name_header)
+    else:
+        t = threading.Thread(
+            target=send_email_sync,
+            args=(to_emails, subject, html_content, text_content, is_bulk, club_name_header),
+            daemon=True,
+        )
+        t.start()
+        # Wait up to 3.5s so delivery usually completes before response without blocking indefinitely
+        t.join(timeout=3.5)
 
 
 # ============================================================================
@@ -233,7 +282,14 @@ def send_session_announced_email(
       </div>
     """
     text_content = f"New Saturday Session announced for {club_name}!\nTopic: {topic}\nDate: {scheduled_date}\nVenue: {venue}\nFormat: {format_type}\nDeliverable: {deliverable_desc}"
-    send_email_in_background(to_emails, subject, _base_template("New Saturday Club Session", body_html), text_content)
+    send_email_in_background(
+        to_emails,
+        subject,
+        _base_template("New Saturday Club Session", body_html),
+        text_content,
+        is_bulk=True,
+        club_name_header=club_name,
+    )
 
 
 def send_club_news_email(
@@ -270,4 +326,11 @@ def send_club_news_email(
       </div>
     """
     text_content = f"Club Announcement for {club_name}:\n{title}\nBy: {author_name}\n\n{content}"
-    send_email_in_background(to_emails, subject, _base_template("Club Announcement", body_html), text_content)
+    send_email_in_background(
+        to_emails,
+        subject,
+        _base_template("Club Announcement", body_html),
+        text_content,
+        is_bulk=True,
+        club_name_header=club_name,
+    )
