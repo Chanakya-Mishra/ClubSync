@@ -1,6 +1,6 @@
 # MSOT Club Activities Tracker (Problem 3)
 
-A unified, mobile-first platform to run every MSOT club across **HI-Tech**, **Ratnam**, **RGIB**, and **JUJ** campuses—covering **student enrolment, 7-step Saturday Club Day planning, 15s rotating QR check-in, deliverable submissions, rubric evaluation, inter-campus events, and tamper-evident PDF certificates & co-curricular transcripts**.
+A unified, mobile-first platform to run every MSOT club across **HI-Tech**, **Rathinam**, and **JUJ** campuses—covering **student enrolment, 7-step Saturday Club Day planning, 15s rotating QR check-in, deliverable submissions, rubric evaluation, inter-campus events, and tamper-evident PDF certificates & co-curricular transcripts**.
 
 ---
 

@@ -2211,7 +2211,7 @@ function fillSampleCsvUsers() {
     'Dr. Meera Krishnan, meera.advisor@college.edu, ADVISOR, HI-Tech, FAC-HT-01, pass123',
     'Rohan Verma, rohan.coord@college.edu, COORDINATOR, HI-Tech, MSOT-HT-2501, pass123',
     'Ananya Reddy, ananya@college.edu, STUDENT, HI-Tech, MSOT-HT-2502, pass123',
-    'Karthik Nair, karthik@college.edu, STUDENT, Ratnam, MSOT-RT-2503, pass123',
+    'Karthik Nair, karthik@college.edu, STUDENT, Rathinam, MSOT-RT-2503, pass123',
   ].join('\n');
 }
 

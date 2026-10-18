@@ -168,7 +168,7 @@ def _base_template(title: str, body_html: str) -> str:
       {body_html}
     </div>
     <div class="footer">
-      <p style="margin: 0 0 6px;">This is an automated notification from ClubSync (HI-Tech, Ratnam, RGIB & JUJ Campuses).</p>
+      <p style="margin: 0 0 6px;">This is an automated notification from ClubSync (HI-Tech, Rathinam & JUJ Campuses).</p>
       <p style="margin: 0;">Please do not reply directly to this email.</p>
     </div>
   </div>

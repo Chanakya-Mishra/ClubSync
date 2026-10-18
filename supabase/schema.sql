@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS public.system_configs (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Campuses (HI-Tech, Ratnam, RGIB, JUJ)
+-- 2. Campuses (HI-Tech, Rathinam, JUJ)
 CREATE TABLE IF NOT EXISTS public.campuses (
     id VARCHAR(36) PRIMARY KEY DEFAULT uuid_generate_v4()::text,
     code VARCHAR(30) UNIQUE NOT NULL,

@@ -1,7 +1,7 @@
 # MSOT Club Activities Tracker — Architecture & System Design Document
 
 ## 1. Executive Summary & Core Design Principles
-The **MSOT Club Activities Tracker** is a unified, mobile-first platform built to manage the end-to-end co-curricular lifecycle across all four MSOT campuses (**HI-Tech**, **Ratnam**, **RGIB**, and **JUJ**). Every architectural decision is anchored in the three core principles of Problem 3:
+The **MSOT Club Activities Tracker** is a unified, mobile-first platform built to manage the end-to-end co-curricular lifecycle across all three MSOT campuses (**HI-Tech**, **Rathinam**, and **JUJ**). Every architectural decision is anchored in the three core principles of Problem 3:
 1. **Verified Record:** Every participation entry is backed by a cryptographic QR/OTP check-in, a timestamped deliverable submission, or an audited Coordinator/Faculty Advisor approval.
 2. **Low Effort for Coordinators:** Student coordinators can run a Saturday Club Day from their phone in a few taps—projecting a live rotating QR code, marking presenters, and scoring rubric evaluations.
 3. **Student-Owned Co-Curricular Transcript:** Every student can generate and download an official, tamper-evident PDF Co-Curricular Transcript and individual PDF certificates embedded with public QR verification links and SHA-256 digests.
@@ -55,7 +55,7 @@ The persistence layer is designed for **Supabase PostgreSQL** ([`supabase/schema
 ### A. Anti-Screenshot Rotating QR Check-In & Campus Geofencing
 1. **15-Second Time-Bucketed HMAC Token:** Each Club Day session has a 128-bit `checkin_secret`. Every 15 seconds, the server derives a deterministic token `MSOT-QR:{session_id}:{time_bucket}:{hmac_sha256[:16]}` and a 6-digit OTP.
 2. **Anti-Screenshot Rejection:** Only the current 15-second bucket and `bucket - 1` (grace window for network jitter) are accepted. If a student shares a screenshot on WhatsApp and another student scans it 45–60 seconds later, the server detects the valid HMAC on an expired bucket and rejects it with `403 EXPIRED_QR_SCREENSHOT`, logging the attempt in `audit_logs`.
-3. **Campus Haversine Geofence:** The check-in endpoint computes the Haversine distance between the student's GPS coordinates and the campus coordinates (`HI-Tech`, `Ratnam`, `RGIB`, `JUJ`). Check-ins outside the `500m` radius are rejected with `403 OUTSIDE_CAMPUS_GEOFENCE`.
+3. **Campus Haversine Geofence:** The check-in endpoint computes the Haversine distance between the student's GPS coordinates and the campus coordinates (`HI-Tech`, `Rathinam`, `JUJ`). Check-ins outside the `500m` radius are rejected with `403 OUTSIDE_CAMPUS_GEOFENCE`.
 4. **Late Window & Audited Coordinator Overrides:** Check-ins occurring after `checkin_late_after` (15 minutes after session start) are automatically flagged `LATE`. Manual coordinator corrections require a mandatory `override_reason` ($\ge 5$ chars) and record `overridden_by_id`.
 
 ### B. Tamper-Proof PDF Certificates & Co-Curricular Transcripts

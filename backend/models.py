@@ -33,7 +33,7 @@ class Campus(Base):
     __tablename__ = "campuses"
 
     id = Column(String(36), primary_key=True, default=gen_uuid)
-    code = Column(String(30), unique=True, nullable=False, index=True)  # HI-Tech, Ratnam, RGIB, JUJ
+    code = Column(String(30), unique=True, nullable=False, index=True)  # HI-Tech, Rathinam, JUJ
     name = Column(String(120), nullable=False)
     city = Column(String(80), nullable=False)
     lat = Column(Float, nullable=False)
