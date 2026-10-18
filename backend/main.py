@@ -3344,6 +3344,83 @@ def admin_update_user(
     return serialize_user(u, campuses_map)
 
 
+@app.delete("/api/admin/users/{user_id}")
+def admin_delete_user(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role not in ("ADMIN", "CAMPUS_MGR"):
+        raise HTTPException(status_code=403, detail="Only Admin or Campus Manager can remove accounts.")
+
+    if current_user.id == user_id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account.")
+
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    if current_user.role == "CAMPUS_MGR" and target_user.role == "ADMIN":
+        raise HTTPException(status_code=403, detail="Campus Managers cannot remove System Admin accounts.")
+
+    user_full_name = target_user.full_name
+    user_email = target_user.email
+    user_role = target_user.role
+
+    # 1. Nullify references where target_user was an approver / advisor / planner / actor
+    db.query(Club).filter(Club.advisor_id == user_id).update({Club.advisor_id: None})
+    db.query(ClubMembership).filter(ClubMembership.approved_by_id == user_id).update({ClubMembership.approved_by_id: None})
+    db.query(ClubDaySession).filter(ClubDaySession.planned_by_id == user_id).update({ClubDaySession.planned_by_id: None})
+    db.query(ClubDaySession).filter(ClubDaySession.approved_by_id == user_id).update({ClubDaySession.approved_by_id: None})
+    db.query(Attendance).filter(Attendance.overridden_by_id == user_id).update({Attendance.overridden_by_id: None})
+    db.query(BudgetRequest).filter(BudgetRequest.approved_by_id == user_id).update({BudgetRequest.approved_by_id: None})
+    db.query(DutyLeaveRequest).filter(DutyLeaveRequest.approved_by_id == user_id).update({DutyLeaveRequest.approved_by_id: None})
+    db.query(MediaGalleryItem).filter(MediaGalleryItem.tagged_student_id == user_id).update({MediaGalleryItem.tagged_student_id: None})
+    db.query(AuditLog).filter(AuditLog.actor_id == user_id).update({AuditLog.actor_id: None})
+
+    # 2. Delete evaluations written by target_user
+    db.query(Evaluation).filter(Evaluation.evaluator_id == user_id).delete(synchronize_session=False)
+
+    # 3. Delete evaluations on submissions made by target_user, then delete submissions
+    sub_ids = [s.id for s in db.query(Submission.id).filter(Submission.student_id == user_id).all()]
+    if sub_ids:
+        db.query(Evaluation).filter(Evaluation.submission_id.in_(sub_ids)).delete(synchronize_session=False)
+        db.query(Submission).filter(Submission.id.in_(sub_ids)).delete(synchronize_session=False)
+
+    # 4. Delete attendance, certificates, duty leaves, club memberships, and password reset OTPs
+    db.query(Attendance).filter(Attendance.student_id == user_id).delete(synchronize_session=False)
+    db.query(Certificate).filter(Certificate.student_id == user_id).delete(synchronize_session=False)
+    db.query(DutyLeaveRequest).filter(DutyLeaveRequest.student_id == user_id).delete(synchronize_session=False)
+    db.query(ClubMembership).filter(ClubMembership.student_id == user_id).delete(synchronize_session=False)
+    db.query(BudgetRequest).filter(BudgetRequest.requested_by_id == user_id).delete(synchronize_session=False)
+    db.query(MediaGalleryItem).filter(MediaGalleryItem.uploaded_by_id == user_id).delete(synchronize_session=False)
+    db.query(ClubNews).filter(ClubNews.author_id == user_id).delete(synchronize_session=False)
+    db.query(PasswordResetOTP).filter(PasswordResetOTP.email.ilike(user_email)).delete(synchronize_session=False)
+
+    # 5. Delete event registrations and event teams led by target_user
+    db.query(EventRegistration).filter(EventRegistration.student_id == user_id).delete(synchronize_session=False)
+    teams_led = db.query(EventTeam).filter(EventTeam.leader_id == user_id).all()
+    for team in teams_led:
+        db.query(EventRegistration).filter(EventRegistration.team_id == team.id).delete(synchronize_session=False)
+        db.delete(team)
+
+    # 6. Delete target user
+    db.delete(target_user)
+
+    # 7. Record Audit Log
+    db.add(
+        AuditLog(
+            actor_id=current_user.id,
+            action="USER_DELETED_BY_ADMIN",
+            entity_type="USER",
+            entity_id=user_id,
+            details=f"Account '{user_full_name}' ({user_email}, role={user_role}) was permanently removed by {current_user.full_name} ({current_user.role}).",
+        )
+    )
+    db.commit()
+    return {"success": True, "message": f"Account '{user_full_name}' ({user_email}) has been permanently removed."}
+
+
 @app.post("/api/admin/users/bulk")
 def admin_bulk_onboard_users(
     req: BulkUserOnboardingRequest,

@@ -683,8 +683,11 @@ async function loadDashboard() {
                 <button onclick="decideUserAccount('${u.id}', 'APPROVED')" class="px-2.5 py-1 rounded-lg btn-gradient-emerald text-white text-[11px] font-bold">
                   Permit
                 </button>
-                <button onclick="decideUserAccount('${u.id}', 'REJECTED')" class="px-2 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-semibold">
+                <button onclick="decideUserAccount('${u.id}', 'REJECTED')" class="px-2 py-1 rounded-lg border border-amber-300 text-amber-800 hover:bg-amber-50 text-[11px] font-semibold">
                   Decline
+                </button>
+                <button onclick="handleDeleteUser('${u.id}', '${(u.full_name || '').replace(/'/g, "\\'")}', '${u.role || 'User'}')" class="px-2 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-semibold" title="Permanently remove account">
+                  Remove
                 </button>
               </div>
             </div>
@@ -1935,7 +1938,7 @@ async function loadAdminCenter() {
     cards.push(`
       <div class="p-3.5 rounded-xl bg-rose-50/80 border border-rose-200 flex items-center justify-between gap-2">
         <div>
-          <span class="text-[10px] font-bold uppercase text-rose-700">Student Account Request (${u.campus_code})</span>
+          <span class="text-[10px] font-bold uppercase text-rose-700">${u.role || 'User'} Account Request (${u.campus_code})</span>
           <div class="font-bold text-slate-900">${u.full_name}</div>
           <div class="text-[11px] text-slate-600">${u.email} ${u.roll_number ? '• ' + u.roll_number : ''}</div>
         </div>
@@ -1943,8 +1946,11 @@ async function loadAdminCenter() {
           <button onclick="decideUserAccount('${u.id}', 'APPROVED')" class="px-2.5 py-1.5 rounded-lg btn-gradient-emerald text-white font-semibold text-[11px]">
             Permit
           </button>
-          <button onclick="decideUserAccount('${u.id}', 'REJECTED')" class="px-2 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-[11px]">
+          <button onclick="decideUserAccount('${u.id}', 'REJECTED')" class="px-2 py-1.5 rounded-lg border border-amber-300 text-amber-800 hover:bg-amber-50 text-[11px] font-semibold">
             Decline
+          </button>
+          <button onclick="handleDeleteUser('${u.id}', '${(u.full_name || '').replace(/'/g, "\\'")}', '${u.role || 'User'}')" class="px-2 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-[11px]" title="Permanently remove account">
+            Remove
           </button>
         </div>
       </div>
@@ -2044,10 +2050,15 @@ async function loadAdminCenter() {
 
       const accessButtons =
         u.account_status !== 'APPROVED'
-          ? `<button onclick="decideUserAccount('${u.id}', 'APPROVED')" class="px-2.5 py-1 rounded btn-gradient-emerald text-white text-[11px] font-semibold mr-1">Permit Access</button>`
+          ? `<button onclick="decideUserAccount('${u.id}', 'APPROVED')" class="px-2.5 py-1 rounded btn-gradient-emerald text-white text-[11px] font-semibold mr-1">Permit</button>`
           : u.id !== currentUser.id
-          ? `<button onclick="decideUserAccount('${u.id}', 'REJECTED')" class="px-2 py-1 rounded border border-rose-200 text-rose-600 hover:bg-rose-50 text-[11px] font-medium mr-1">Revoke</button>`
+          ? `<button onclick="decideUserAccount('${u.id}', 'REJECTED')" class="px-2 py-1 rounded border border-amber-300 text-amber-700 hover:bg-amber-50 text-[11px] font-medium mr-1">Revoke</button>`
           : '';
+
+      const canDelete = u.id !== currentUser.id && (currentUser.role === 'ADMIN' || u.role !== 'ADMIN');
+      const deleteButton = canDelete
+        ? `<button onclick="handleDeleteUser('${u.id}', '${(u.full_name || '').replace(/'/g, "\\'")}', '${u.role}')" class="px-2 py-1 rounded border border-rose-300 bg-rose-50/80 text-rose-700 hover:bg-rose-100 hover:border-rose-400 text-[11px] font-semibold transition-colors" title="Permanently remove this account">Remove</button>`
+        : '';
 
       return `
         <tr>
@@ -2067,7 +2078,7 @@ async function loadAdminCenter() {
               <option value="ADMIN" ${u.role === 'ADMIN' ? 'selected' : ''}>ADMIN</option>
             </select>
           </td>
-          <td class="px-4 py-2.5">${accessButtons}</td>
+          <td class="px-4 py-2.5 flex items-center gap-1">${accessButtons} ${deleteButton}</td>
         </tr>
       `;
     })
@@ -2128,6 +2139,31 @@ async function decideUserAccount(userId, accountStatus) {
         ? `Permitted account for ${updated.full_name}`
         : `Revoked/declined account for ${updated.full_name}`
     );
+    await refreshPendingBadge();
+    const adminTab = document.getElementById('tab-admin');
+    if (adminTab && !adminTab.classList.contains('hidden')) {
+      await loadAdminCenter();
+    }
+    const dashTab = document.getElementById('tab-dashboard');
+    if (dashTab && !dashTab.classList.contains('hidden')) {
+      await loadDashboard();
+    }
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+async function handleDeleteUser(userId, userName, userRole) {
+  const confirmed = confirm(
+    `Are you sure you want to permanently remove the ${userRole || 'User'} account for "${userName}"?\n\nThis will permanently delete their account profile, club memberships, and related records from the database. This action cannot be undone.`
+  );
+  if (!confirmed) return;
+
+  try {
+    const res = await apiFetch(`/api/admin/users/${userId}`, {
+      method: 'DELETE',
+    });
+    showToast(res.message || `Account for "${userName}" removed successfully.`);
     await refreshPendingBadge();
     const adminTab = document.getElementById('tab-admin');
     if (adminTab && !adminTab.classList.contains('hidden')) {
