@@ -2019,34 +2019,6 @@ async function loadAdminCenter() {
     document.getElementById('cfg-geofence').value = sysStatus.configs.geofence_check_enabled || 'true';
   }
 
-  // Render Database Provider Status
-  const dbInfo = sysStatus.database || {};
-  const badgeEl = document.getElementById('admin-db-provider-badge');
-  const descEl = document.getElementById('admin-db-provider-desc');
-  const iconEl = document.getElementById('admin-db-status-icon');
-  const actionEl = document.getElementById('admin-db-action-container');
-  if (badgeEl && descEl) {
-    if (dbInfo.is_supabase_postgres) {
-      badgeEl.className = 'px-2 py-0.5 rounded-full font-mono text-[11px] font-bold bg-emerald-100 text-emerald-800';
-      badgeEl.textContent = 'Supabase Cloud PostgreSQL (Connected & Permanent)';
-      descEl.textContent = 'All student registrations, passwords, and club records persist permanently across deployments.';
-      if (iconEl) iconEl.className = 'w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 bg-emerald-100 text-emerald-700';
-      if (actionEl) actionEl.innerHTML = `<span class="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">✓ Cloud Database Online</span>`;
-    } else if (dbInfo.is_ephemeral_vercel_sqlite) {
-      badgeEl.className = 'px-2 py-0.5 rounded-full font-mono text-[11px] font-bold bg-rose-100 text-rose-800';
-      badgeEl.textContent = 'Vercel Ephemeral /tmp SQLite (Supabase URL Missing)';
-      descEl.innerHTML = '<strong class="text-rose-700">Warning:</strong> Running on temporary Vercel storage. Add <code class="bg-rose-50 px-1 py-0.5 rounded font-mono font-bold">SUPABASE_DB_URL</code> to your Vercel Environment Variables to permanently store all accounts.';
-      if (iconEl) iconEl.className = 'w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 bg-rose-100 text-rose-700';
-      if (actionEl) actionEl.innerHTML = `<button onclick="alert('To make your accounts permanent on Vercel:\n1. Copy the SUPABASE_DB_URL connection string from Supabase (Project Settings -> Database -> Connection string URI).\n2. Add it to Vercel (Project -> Settings -> Environment Variables -> SUPABASE_DB_URL).\n3. Redeploy your project.')" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold">How to Connect Supabase</button>`;
-    } else {
-      badgeEl.className = 'px-2 py-0.5 rounded-full font-mono text-[11px] font-bold bg-slate-100 text-slate-800';
-      badgeEl.textContent = 'Local SQLite Engine (data/msot_club_tracker.db)';
-      descEl.textContent = 'Running locally on disk. To persist data when deployed on Vercel, connect your Supabase PostgreSQL database.';
-      if (iconEl) iconEl.className = 'w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 bg-indigo-100 text-indigo-700';
-      if (actionEl) actionEl.innerHTML = `<span class="text-slate-500 font-medium">Local Disk Storage Active</span>`;
-    }
-  }
-
   // 1. Render Unified Pending Queue (Starting with Pending Student Account Requests!)
   const qContainer = document.getElementById('admin-pending-queue-container');
   const cards = [];
