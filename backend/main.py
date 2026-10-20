@@ -9,7 +9,7 @@ import secrets
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 
-from fastapi import FastAPI, Depends, HTTPException, Header, UploadFile, File, Form, Query
+from fastapi import FastAPI, Depends, HTTPException, Header, UploadFile, File, Form, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -1213,6 +1213,66 @@ def plan_club_day_session(
         "id": sess.id,
         "plan_status": sess.plan_status,
         "message": "Activity plan created and sent for Advisor approval.",
+    }
+
+
+@app.post("/api/sessions/quick-start")
+def quick_start_session(
+    payload: Dict[str, Any] = Body(default={}),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    1-Click Live Session & Rotating QR Launcher for Campus Managers, Presidents, and Advisors.
+    Immediately creates an approved session and opens the check-in window.
+    """
+    if current_user.role not in ("CAMPUS_MGR", "ADMIN", "PRESIDENT", "COORDINATOR", "ADVISOR"):
+        raise HTTPException(status_code=403, detail="Only Campus Managers, Club Presidents, and Faculty Advisors can launch live sessions.")
+
+    club_id = payload.get("club_id")
+    if not club_id:
+        # Default to first club for user campus
+        q = db.query(Club)
+        if current_user.campus_id:
+            q = q.filter(Club.campus_id == current_user.campus_id)
+        club = q.first() or db.query(Club).first()
+        if not club:
+            raise HTTPException(status_code=400, detail="No club registered yet. Create a club first.")
+        club_id = club.id
+    else:
+        verify_coordinator_club_access(db, current_user, club_id)
+        club = db.query(Club).filter(Club.id == club_id).first()
+
+    now = datetime.utcnow()
+    scheduled_date = datetime.now().strftime("%Y-%m-%d")
+    topic = payload.get("topic") or f"{club.name} Club Day Hands-On Workshop"
+    
+    sess = ClubDaySession(
+        club_id=club_id,
+        week_number=int(time.time() // 604800 % 52) + 1,
+        scheduled_date=scheduled_date,
+        topic=topic,
+        format=payload.get("format") or "DEMO",
+        venue=payload.get("venue") or "Campus Seminar Hall",
+        deliverable_desc="Project / Prototype Link & GitHub Repository",
+        submission_deadline=(datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d 23:59"),
+        plan_status="APPROVED",
+        planned_by_id=current_user.id,
+        approved_by_id=current_user.id,
+        checkin_secret=secrets.token_hex(16),
+        checkin_status="OPEN",
+        checkin_opens_at=now,
+        checkin_closes_at=now + timedelta(hours=3),
+    )
+    db.add(sess)
+    db.commit()
+    db.refresh(sess)
+    return {
+        "id": sess.id,
+        "topic": sess.topic,
+        "club_name": club.name,
+        "checkin_status": sess.checkin_status,
+        "message": f"Live session started for {club.name}! Rotating QR is now live.",
     }
 
 

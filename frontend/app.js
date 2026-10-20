@@ -509,8 +509,9 @@ function applyRoleVisibility() {
   document.getElementById('btn-create-club')?.classList.toggle('hidden', !isAdminOrMgr);
   document.getElementById('card-enrolment-requests')?.classList.toggle('hidden', isStudent);
 
-  // 5. Sessions Tab: Hide "+ Plan Club Day Session" from regular Students
+  // 5. Sessions Tab: Hide "+ Plan Club Day Session" & Quick QR from regular Students
   document.getElementById('btn-plan-session')?.classList.toggle('hidden', isStudent);
+  document.getElementById('btn-quick-qr')?.classList.toggle('hidden', isStudent);
 
   // 6. Events Tab: Hide "+ Create Event" from Students/Coordinators/Advisors
   document.getElementById('btn-create-event')?.classList.toggle('hidden', !isAdminOrMgr);
@@ -1078,13 +1079,26 @@ async function submitPlanSession(e) {
 function renderSessionsList(sessions) {
   const container = document.getElementById('sessions-list');
   if (!container) return;
+  const isStaffOrCoord = currentUser && currentUser.role !== 'STUDENT';
+  const isAdvisorOrAdmin = currentUser && ['ADVISOR', 'CAMPUS_MGR', 'ADMIN'].includes(currentUser.role);
+
   if (!sessions || !sessions.length) {
-    container.innerHTML = `<div class="glass-card rounded-2xl p-8 text-center text-slate-500 text-sm">No Club Day sessions scheduled yet.</div>`;
+    container.innerHTML = `
+      <div class="glass-card rounded-2xl p-8 text-center space-y-3">
+        <div class="w-12 h-12 mx-auto rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-xl">📅</div>
+        <p class="font-bold text-slate-800 text-sm">No Club Day sessions scheduled yet.</p>
+        <p class="text-xs text-slate-500 max-w-sm mx-auto">Launch an active session to generate live rotating QR codes and track attendance.</p>
+        ${
+          isStaffOrCoord
+            ? `<button onclick="quickStartSessionAndQr()" class="px-4 py-2 rounded-xl btn-gradient-emerald text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-sm">
+                <span>⚡ Instant Live Session & Rotating QR</span>
+              </button>`
+            : ''
+        }
+      </div>
+    `;
     return;
   }
-
-  const isAdvisorOrAdmin = currentUser && ['ADVISOR', 'CAMPUS_MGR', 'ADMIN'].includes(currentUser.role);
-  const isStaffOrCoord = currentUser && currentUser.role !== 'STUDENT';
 
   container.innerHTML = sessions
     .map((s) => {
@@ -1102,22 +1116,46 @@ function renderSessionsList(sessions) {
 
       const announceBtn =
         isStaffOrCoord && s.plan_status === 'APPROVED' && !s.announced
-          ? `<button onclick="announceSession('${s.id}')" class="px-3 py-1.5 rounded-lg border border-blue-300 bg-blue-50 text-blue-700 text-xs font-semibold">Announce to Members</button>`
+          ? `<button onclick="announceSession('${s.id}')" class="px-3 py-1.5 rounded-lg border border-blue-300 bg-blue-50 text-blue-700 text-xs font-semibold">Announce</button>`
           : '';
 
-      const windowBtn =
-        isStaffOrCoord && s.plan_status === 'APPROVED'
-          ? s.checkin_status !== 'OPEN'
-            ? `<button onclick="toggleCheckinWindow('${s.id}', 'OPEN')" class="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold">Open Check-In Window</button>`
-            : `<button onclick="toggleCheckinWindow('${s.id}', 'CLOSE')" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold">Close Check-In Window</button>`
-          : '';
+      const isWindowOpen = s.checkin_status === 'OPEN';
+      let checkinActionButtons = '';
 
-      const checkinBtn =
-        s.checkin_status === 'OPEN'
-          ? `<button onclick="openCheckinModal('${s.id}')" class="px-3 py-1.5 rounded-lg btn-gradient text-white text-xs font-semibold">${
-              isStaffOrCoord ? 'Show Live QR / Check-In' : 'Check In to Session'
-            }</button>`
-          : '';
+      if (isStaffOrCoord) {
+        if (isWindowOpen) {
+          checkinActionButtons = `
+            <button onclick="openCheckinModal('${s.id}')" class="px-3.5 py-1.5 rounded-lg btn-gradient text-white text-xs font-bold flex items-center gap-1.5 shadow-sm">
+              <span>⛶ Show Live Rotating QR</span>
+            </button>
+            <button onclick="toggleCheckinWindow('${s.id}', 'CLOSE')" class="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold">
+              Close Window
+            </button>
+          `;
+        } else {
+          checkinActionButtons = `
+            <button onclick="toggleCheckinWindowAndQr('${s.id}')" class="px-3 py-1.5 rounded-lg btn-gradient-emerald text-white text-xs font-bold flex items-center gap-1.5 shadow-sm">
+              <span>⚡ Open & Launch Live QR</span>
+            </button>
+            <button onclick="openCheckinModal('${s.id}')" class="px-2.5 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-medium">
+              Preview QR
+            </button>
+          `;
+        }
+      } else {
+        // Regular Student
+        if (isWindowOpen) {
+          checkinActionButtons = `
+            <button onclick="openCheckinModal('${s.id}')" class="px-3.5 py-1.5 rounded-lg btn-gradient text-white text-xs font-bold flex items-center gap-1.5">
+              <span>⚡ Check In to Session</span>
+            </button>
+          `;
+        } else {
+          checkinActionButtons = `
+            <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-500 text-xs font-medium">Check-In Closed</span>
+          `;
+        }
+      }
 
       const manageRosterBtn = isStaffOrCoord
         ? `<button onclick="openSessionDetail('${s.id}')" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold">
@@ -1150,8 +1188,7 @@ function renderSessionsList(sessions) {
           <div class="flex flex-wrap items-center gap-2">
             ${approvalBtns}
             ${announceBtn}
-            ${windowBtn}
-            ${checkinBtn}
+            ${checkinActionButtons}
             <button onclick="openSubmitWorkModal('${s.id}')" class="px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold">
               Submit Deliverable
             </button>
@@ -1197,10 +1234,41 @@ async function toggleCheckinWindow(sessionId, action) {
   try {
     await apiFetch(`/api/sessions/${sessionId}/checkin-window`, {
       method: 'POST',
-      body: JSON.stringify({ action, duration_minutes: 45, late_after_minutes: 15 }),
+      body: JSON.stringify({ action, duration_minutes: 60, late_after_minutes: 15 }),
     });
     showToast(`Check-in window ${action === 'OPEN' ? 'opened' : 'closed'}`);
     loadSessions();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+async function toggleCheckinWindowAndQr(sessionId) {
+  try {
+    await apiFetch(`/api/sessions/${sessionId}/checkin-window`, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'OPEN', duration_minutes: 60, late_after_minutes: 15 }),
+    });
+    showToast('Check-in window opened! Rotating QR is live.');
+    loadSessions();
+    openCheckinModal(sessionId);
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+async function quickStartSessionAndQr(clubId = null) {
+  try {
+    const res = await apiFetch('/api/sessions/quick-start', {
+      method: 'POST',
+      body: JSON.stringify({ club_id: clubId }),
+    });
+    showToast(res.message);
+    loadSessions();
+    if (currentUser && ['ADMIN', 'CAMPUS_MGR', 'ADVISOR'].includes(currentUser.role)) {
+      loadAdminCenter();
+    }
+    openCheckinModal(res.id);
   } catch (err) {
     showToast(err.message, true);
   }
@@ -2103,6 +2171,24 @@ async function loadAdminCenter() {
     document.getElementById('cfg-geofence').value = sysStatus.configs.geofence_check_enabled || 'true';
   }
 
+  // Populate Admin Live Rotating QR Station
+  try {
+    const adminSessions = await apiFetch('/api/sessions');
+    const qrSelect = document.getElementById('admin-qr-session-select');
+    if (qrSelect) {
+      if (adminSessions && adminSessions.length) {
+        qrSelect.innerHTML = adminSessions
+          .map((s) => `<option value="${s.id}" data-status="${s.checkin_status}">${s.club_name} — ${s.topic} (${s.checkin_status})</option>`)
+          .join('');
+        onAdminQrSessionChanged();
+      } else {
+        qrSelect.innerHTML = `<option value="">No sessions scheduled yet (click Instant Live Session)</option>`;
+        const pill = document.getElementById('admin-qr-status-pill');
+        if (pill) pill.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-400"></span> No active session`;
+      }
+    }
+  } catch (_) {}
+
   // 1. Render Unified Pending Queue (Starting with Pending Student Account Requests!)
   const qContainer = document.getElementById('admin-pending-queue-container');
   const cards = [];
@@ -2273,6 +2359,82 @@ async function loadAdminCenter() {
         )
         .join('')
     : `<tr><td colspan="4" class="px-4 py-5 text-center text-slate-400">No audit events recorded yet.</td></tr>`;
+}
+
+function onAdminQrSessionChanged() {
+  const qrSelect = document.getElementById('admin-qr-session-select');
+  const pill = document.getElementById('admin-qr-status-pill');
+  const toggleBtn = document.getElementById('admin-btn-toggle-window');
+  if (!qrSelect || !qrSelect.value) {
+    if (pill) pill.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-400"></span> No session selected`;
+    return;
+  }
+  const selectedOpt = qrSelect.options[qrSelect.selectedIndex];
+  const status = selectedOpt ? selectedOpt.getAttribute('data-status') : 'CLOSED';
+  if (pill) {
+    if (status === 'OPEN') {
+      pill.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> <span class="text-emerald-700">Check-In Window OPEN (Active)</span>`;
+    } else {
+      pill.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-400"></span> <span class="text-slate-600">Window Closed</span>`;
+    }
+  }
+  if (toggleBtn) {
+    toggleBtn.textContent = status === 'OPEN' ? 'Close Window' : 'Open Window';
+    toggleBtn.className = status === 'OPEN'
+      ? 'px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shrink-0'
+      : 'px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shrink-0';
+  }
+}
+
+async function launchAdminSelectedQr() {
+  const qrSelect = document.getElementById('admin-qr-session-select');
+  if (!qrSelect || !qrSelect.value) {
+    quickStartSessionAndQr();
+    return;
+  }
+  const sessionId = qrSelect.value;
+  const selectedOpt = qrSelect.options[qrSelect.selectedIndex];
+  const status = selectedOpt ? selectedOpt.getAttribute('data-status') : 'CLOSED';
+  if (status !== 'OPEN') {
+    try {
+      await apiFetch(`/api/sessions/${sessionId}/checkin-window`, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'OPEN', duration_minutes: 60, late_after_minutes: 15 }),
+      });
+      showToast('Check-in window opened! Rotating QR is live.');
+      if (selectedOpt) selectedOpt.setAttribute('data-status', 'OPEN');
+      onAdminQrSessionChanged();
+      loadSessions();
+    } catch (_) {}
+  }
+  openCheckinModal(sessionId);
+}
+
+async function toggleAdminSelectedWindow() {
+  const qrSelect = document.getElementById('admin-qr-session-select');
+  if (!qrSelect || !qrSelect.value) {
+    showToast('Select a session first or click Instant Live Session.', true);
+    return;
+  }
+  const sessionId = qrSelect.value;
+  const selectedOpt = qrSelect.options[qrSelect.selectedIndex];
+  const currentStatus = selectedOpt ? selectedOpt.getAttribute('data-status') : 'CLOSED';
+  const newAction = currentStatus === 'OPEN' ? 'CLOSE' : 'OPEN';
+  try {
+    await apiFetch(`/api/sessions/${sessionId}/checkin-window`, {
+      method: 'POST',
+      body: JSON.stringify({ action: newAction, duration_minutes: 60, late_after_minutes: 15 }),
+    });
+    showToast(`Check-in window ${newAction === 'OPEN' ? 'opened' : 'closed'}`);
+    if (selectedOpt) selectedOpt.setAttribute('data-status', newAction === 'OPEN' ? 'OPEN' : 'CLOSED');
+    onAdminQrSessionChanged();
+    loadSessions();
+    if (newAction === 'OPEN') {
+      openCheckinModal(sessionId);
+    }
+  } catch (err) {
+    showToast(err.message, true);
+  }
 }
 
 async function submitAdminCreateUser(e) {
