@@ -1084,12 +1084,53 @@ def approve_or_reject_enrolment(
 # 3. Club Day Calendar & 7-Step Flow
 # ============================================================================
 
+def cleanup_expired_sessions(db: Session):
+    """
+    Automatic cleanup 30 minutes after generation:
+    1. Removes all DEMO sessions (format == 'DEMO' or topic contains 'demo') created > 30 mins ago.
+    2. Closes / completes any open check-in windows older than 30 minutes.
+    """
+    try:
+        cutoff = datetime.utcnow() - timedelta(minutes=30)
+        # 1. Purge expired demo sessions
+        expired_demos = (
+            db.query(ClubDaySession)
+            .filter(
+                ClubDaySession.created_at < cutoff,
+                (ClubDaySession.format == "DEMO") | (ClubDaySession.topic.ilike("%demo%"))
+            )
+            .all()
+        )
+        for s in expired_demos:
+            db.delete(s)
+
+        # 2. Mark any open sessions created > 30 minutes ago as COMPLETED
+        open_expired = (
+            db.query(ClubDaySession)
+            .filter(
+                ClubDaySession.created_at < cutoff,
+                ClubDaySession.checkin_status == "OPEN",
+            )
+            .all()
+        )
+        for s in open_expired:
+            s.checkin_status = "COMPLETED"
+            if not s.checkin_closes_at or s.checkin_closes_at > cutoff:
+                s.checkin_closes_at = s.created_at + timedelta(minutes=30)
+
+        if expired_demos or open_expired:
+            db.commit()
+    except Exception as e:
+        db.rollback()
+
+
 @app.get("/api/sessions")
 def list_club_day_sessions(
     club_id: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    cleanup_expired_sessions(db)
     q = db.query(ClubDaySession)
     if club_id:
         q = q.filter(ClubDaySession.club_id == club_id)
@@ -1243,6 +1284,7 @@ def quick_start_session(
         verify_coordinator_club_access(db, current_user, club_id)
         club = db.query(Club).filter(Club.id == club_id).first()
 
+    cleanup_expired_sessions(db)
     now = datetime.utcnow()
     scheduled_date = datetime.now().strftime("%Y-%m-%d")
     topic = payload.get("topic") or f"{club.name} Club Day Hands-On Workshop"
@@ -1262,7 +1304,8 @@ def quick_start_session(
         checkin_secret=secrets.token_hex(16),
         checkin_status="OPEN",
         checkin_opens_at=now,
-        checkin_closes_at=now + timedelta(hours=3),
+        checkin_late_after=now + timedelta(minutes=15),
+        checkin_closes_at=now + timedelta(minutes=30),
     )
     db.add(sess)
     db.commit()
@@ -1373,9 +1416,15 @@ def toggle_checkin_window(
 
 @app.get("/api/sessions/{session_id}/qr")
 def get_live_session_qr(session_id: str, db: Session = Depends(get_db)):
+    cleanup_expired_sessions(db)
     sess = db.query(ClubDaySession).filter(ClubDaySession.id == session_id).first()
     if not sess:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Session not found or has expired after 30 minutes.")
+
+    now = datetime.utcnow()
+    if sess.checkin_closes_at and now > sess.checkin_closes_at:
+        sess.checkin_status = "COMPLETED"
+        db.commit()
 
     payload = generate_qr_payload(sess.checkin_secret, sess.id)
     payload["checkin_status"] = sess.checkin_status
@@ -1402,9 +1451,10 @@ def student_checkin(
     x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     db: Session = Depends(get_db),
 ):
+    cleanup_expired_sessions(db)
     sess = db.query(ClubDaySession).filter(ClubDaySession.id == session_id).first()
     if not sess:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Session not found or has expired after 30 minutes.")
 
     if sess.checkin_status != "OPEN":
         raise HTTPException(status_code=400, detail="Check-in window is currently closed for this session.")
@@ -2508,8 +2558,11 @@ def get_monthly_club_reports(
 @app.get("/api/dashboard/overview")
 def get_dashboard_analytics(
     campus_id: Optional[str] = None,
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     db: Session = Depends(get_db),
 ):
+    cleanup_expired_sessions(db)
     campuses = db.query(Campus).all()
     clubs = db.query(Club).all()
     students = db.query(User).filter(User.role == "STUDENT").all()
@@ -2628,12 +2681,113 @@ def get_dashboard_analytics(
 
     student_rankings.sort(key=lambda x: (x["cumulative_rubric_score"], x["sessions_attended"]), reverse=True)
 
+    # Attendance percentage for currently logged-in user & president club summary
+    my_attendance = None
+    president_club_summary = None
+
+    token_user_id = None
+    if authorization and authorization.startswith("Bearer "):
+        token_user_id = decode_access_token(authorization.replace("Bearer ", "", 1).strip())
+    current_uid = token_user_id or x_user_id
+
+    if current_uid:
+        cur_u = db.query(User).filter(User.id == current_uid).first()
+        if cur_u:
+            # 1. User's personal attendance metrics
+            user_mems = db.query(ClubMembership).filter(
+                ClubMembership.student_id == cur_u.id,
+                ClubMembership.status == "APPROVED"
+            ).all()
+            user_club_ids = [m.club_id for m in user_mems]
+            
+            if user_club_ids:
+                u_sessions = db.query(ClubDaySession).filter(ClubDaySession.club_id.in_(user_club_ids)).all()
+            elif cur_u.campus_id:
+                campus_club_ids = [c.id for c in clubs if c.campus_id == cur_u.campus_id]
+                u_sessions = db.query(ClubDaySession).filter(ClubDaySession.club_id.in_(campus_club_ids)).all() if campus_club_ids else []
+            else:
+                u_sessions = db.query(ClubDaySession).all()
+
+            u_session_ids = [s.id for s in u_sessions]
+            total_sessions_count = len(u_sessions)
+
+            user_atts = (
+                db.query(Attendance)
+                .filter(
+                    Attendance.student_id == cur_u.id,
+                    Attendance.status.in_(["PRESENT", "LATE"])
+                )
+                .all()
+            )
+            if u_session_ids:
+                user_atts = [a for a in user_atts if a.session_id in u_session_ids]
+            
+            attended_count = len(user_atts)
+            late_count = sum(1 for a in user_atts if a.status == "LATE")
+            present_count = attended_count - late_count
+            missed_count = max(0, total_sessions_count - attended_count)
+            att_pct = round((attended_count / total_sessions_count) * 100.0, 1) if total_sessions_count > 0 else (100.0 if attended_count > 0 else 0.0)
+
+            standing = "GOOD_STANDING" if att_pct >= 75.0 else "NEEDS_IMPROVEMENT"
+            if att_pct >= 90.0:
+                standing = "EXCELLENT"
+
+            my_attendance = {
+                "student_id": cur_u.id,
+                "full_name": cur_u.full_name,
+                "role": cur_u.role,
+                "total_sessions": total_sessions_count,
+                "attended_sessions": attended_count,
+                "present_count": present_count,
+                "late_count": late_count,
+                "missed_sessions": missed_count,
+                "attendance_percentage": att_pct,
+                "standing": standing,
+            }
+
+            # 2. If user is PRESIDENT or COORDINATOR, compute their club attendance overview
+            if cur_u.role in ("PRESIDENT", "COORDINATOR", "ADMIN", "CAMPUS_MGR"):
+                pres_club = None
+                if cur_u.role in ("PRESIDENT", "COORDINATOR"):
+                    p_mem = db.query(ClubMembership).filter(
+                        ClubMembership.student_id == cur_u.id,
+                        ClubMembership.tier.in_(["PRESIDENT", "COORDINATOR"]),
+                        ClubMembership.status == "APPROVED"
+                    ).first()
+                    if p_mem:
+                        pres_club = db.query(Club).filter(Club.id == p_mem.club_id).first()
+                if not pres_club and cur_u.campus_id:
+                    pres_club = db.query(Club).filter(Club.campus_id == cur_u.campus_id).first()
+                if not pres_club:
+                    pres_club = db.query(Club).first()
+
+                if pres_club:
+                    p_sessions = db.query(ClubDaySession).filter(ClubDaySession.club_id == pres_club.id).all()
+                    p_mems = db.query(ClubMembership).filter(ClubMembership.club_id == pres_club.id, ClubMembership.status == "APPROVED").all()
+                    p_sess_ids = [s.id for s in p_sessions]
+                    p_atts = db.query(Attendance).filter(Attendance.session_id.in_(p_sess_ids), Attendance.status.in_(["PRESENT", "LATE"])).all() if p_sess_ids else []
+                    
+                    expected_checkins = len(p_mems) * len(p_sessions)
+                    club_rate = round((len(p_atts) / expected_checkins) * 100.0, 1) if expected_checkins > 0 else 0.0
+
+                    president_club_summary = {
+                        "club_id": pres_club.id,
+                        "club_name": pres_club.name,
+                        "club_code": pres_club.code,
+                        "total_members": len(p_mems),
+                        "total_sessions": len(p_sessions),
+                        "verified_checkins": len(p_atts),
+                        "overall_attendance_pct": club_rate,
+                    }
+
     return {
         "campus_breakdown": campus_stats,
         "inactive_clubs": inactive_clubs,
         "zero_participation_students": zero_participation_students,
         "top_contributors": student_rankings[:15],
         "monthly_club_reports": get_monthly_club_reports(campus_id=campus_id, db=db)["club_reports"],
+        "my_attendance": my_attendance,
+        "president_club_summary": president_club_summary,
     }
 
 
@@ -2699,6 +2853,284 @@ def export_academic_review_csv(db: Session = Depends(get_db)):
         iter([output.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=msot_cocurricular_report.csv"},
+    )
+
+
+# ============================================================================
+# President Exclusive: Member Attendance Roster & Tracking
+# ============================================================================
+
+@app.get("/api/president/club-attendance")
+def get_president_club_attendance(
+    club_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    President Exclusive: Track individual attendance percentage and session
+    history for each club member. Accessible only to PRESIDENT, COORDINATOR, CAMPUS_MGR, ADMIN.
+    """
+    if current_user.role not in ("PRESIDENT", "COORDINATOR", "ADMIN", "CAMPUS_MGR", "ADVISOR"):
+        raise HTTPException(
+            status_code=403,
+            detail="Access restricted: Only Club Presidents and Club Leadership can access the Member Attendance Roster.",
+        )
+
+    cleanup_expired_sessions(db)
+
+    # 1. Determine available clubs for this user
+    available_clubs = []
+    if current_user.role in ("ADMIN", "CAMPUS_MGR"):
+        q = db.query(Club)
+        if current_user.role == "CAMPUS_MGR" and current_user.campus_id:
+            q = q.filter(Club.campus_id == current_user.campus_id)
+        available_clubs = q.all()
+    else:
+        # President / Coordinator: find their assigned clubs
+        coord_mems = db.query(ClubMembership).filter(
+            ClubMembership.student_id == current_user.id,
+            ClubMembership.tier.in_(["PRESIDENT", "COORDINATOR"]),
+            ClubMembership.status == "APPROVED"
+        ).all()
+        club_ids = [m.club_id for m in coord_mems]
+        if club_ids:
+            available_clubs = db.query(Club).filter(Club.id.in_(club_ids)).all()
+        elif current_user.campus_id:
+            available_clubs = db.query(Club).filter(Club.campus_id == current_user.campus_id).all()
+        else:
+            available_clubs = db.query(Club).all()
+
+    if not available_clubs:
+        return {
+            "club": None,
+            "available_clubs": [],
+            "summary": {
+                "total_members": 0,
+                "total_sessions": 0,
+                "average_attendance_pct": 0.0,
+                "perfect_attendance_count": 0,
+                "low_attendance_count": 0,
+            },
+            "sessions": [],
+            "members": [],
+        }
+
+    # Selected club
+    target_club = None
+    if club_id:
+        target_club = next((c for c in available_clubs if c.id == club_id), None)
+        if not target_club:
+            target_club = db.query(Club).filter(Club.id == club_id).first()
+    if not target_club:
+        target_club = available_clubs[0]
+
+    # If the user is PRESIDENT and has no membership in target_club yet, auto-add as PRESIDENT
+    if current_user.role in ("PRESIDENT", "COORDINATOR"):
+        existing_mem = db.query(ClubMembership).filter(
+            ClubMembership.club_id == target_club.id,
+            ClubMembership.student_id == current_user.id
+        ).first()
+        if not existing_mem:
+            db.add(ClubMembership(
+                club_id=target_club.id,
+                student_id=current_user.id,
+                tier="PRESIDENT",
+                status="APPROVED",
+                approved_by_id=current_user.id,
+            ))
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+
+    campuses_map = {c.id: c.code for c in db.query(Campus).all()}
+
+    # Query all sessions of this club
+    sessions = (
+        db.query(ClubDaySession)
+        .filter(ClubDaySession.club_id == target_club.id)
+        .order_by(ClubDaySession.scheduled_date.desc(), ClubDaySession.week_number.desc())
+        .all()
+    )
+
+    session_ids = [s.id for s in sessions]
+    total_sessions_count = len(sessions)
+
+    # Query all approved members of this club
+    memberships = (
+        db.query(ClubMembership)
+        .filter(ClubMembership.club_id == target_club.id, ClubMembership.status == "APPROVED")
+        .all()
+    )
+
+    member_user_ids = [m.student_id for m in memberships]
+    users_dict = {
+        u.id: u
+        for u in db.query(User).filter(User.id.in_(member_user_ids)).all()
+    } if member_user_ids else {}
+
+    # Query attendances for all members across these sessions
+    attendances = (
+        db.query(Attendance)
+        .filter(Attendance.session_id.in_(session_ids))
+        .all()
+        if session_ids else []
+    )
+
+    # Group attendances by student_id and by session_id
+    att_by_student: Dict[str, List[Attendance]] = {}
+    att_by_session: Dict[str, int] = {}
+    for a in attendances:
+        if a.status in ("PRESENT", "LATE"):
+            att_by_student.setdefault(a.student_id, []).append(a)
+            att_by_session[a.session_id] = att_by_session.get(a.session_id, 0) + 1
+
+    # Build member roster
+    member_roster = []
+    perfect_count = 0
+    low_count = 0
+
+    for m in memberships:
+        u = users_dict.get(m.student_id)
+        if not u:
+            continue
+        mem_atts = att_by_student.get(u.id, [])
+        attended_count = len(mem_atts)
+        late_count = sum(1 for a in mem_atts if a.status == "LATE")
+        missed_count = max(0, total_sessions_count - attended_count)
+        pct = (
+            round((attended_count / total_sessions_count) * 100.0, 1)
+            if total_sessions_count > 0
+            else 100.0
+        )
+
+        if pct >= 100.0 and total_sessions_count > 0:
+            perfect_count += 1
+        elif pct < 75.0 and total_sessions_count > 0:
+            low_count += 1
+
+        last_att = None
+        last_topic = None
+        if mem_atts:
+            sorted_atts = sorted(mem_atts, key=lambda x: x.checked_in_at or datetime.min, reverse=True)
+            last_att = sorted_atts[0].checked_in_at.strftime("%Y-%m-%d %H:%M") if sorted_atts[0].checked_in_at else None
+            last_sess = next((s for s in sessions if s.id == sorted_atts[0].session_id), None)
+            if last_sess:
+                last_topic = last_sess.topic
+
+        member_roster.append({
+            "student_id": u.id,
+            "full_name": u.full_name,
+            "email": u.email,
+            "roll_number": u.roll_number or "N/A",
+            "tier": m.tier,
+            "status": m.status,
+            "joined_at": m.joined_at.strftime("%Y-%m-%d") if m.joined_at else None,
+            "total_sessions": total_sessions_count,
+            "attended_sessions": attended_count,
+            "late_sessions": late_count,
+            "missed_sessions": missed_count,
+            "attendance_percentage": pct,
+            "last_attended_date": last_att,
+            "last_session_topic": last_topic,
+        })
+
+    # Sort roster: highest attendance first, then alphabetically
+    member_roster.sort(key=lambda x: (-x["attendance_percentage"], x["full_name"]))
+
+    # Sessions list with attendance counts
+    sessions_list = []
+    for s in sessions:
+        present = att_by_session.get(s.id, 0)
+        sessions_list.append({
+            "id": s.id,
+            "topic": s.topic,
+            "scheduled_date": s.scheduled_date,
+            "format": s.format,
+            "checkin_status": s.checkin_status,
+            "present_count": present,
+            "total_expected": len(memberships),
+            "attendance_pct": round((present / len(memberships)) * 100.0, 1) if memberships else 0.0,
+        })
+
+    total_expected_checkins = len(memberships) * total_sessions_count
+    total_actual_checkins = sum(len(atts) for atts in att_by_student.values())
+    avg_pct = round((total_actual_checkins / total_expected_checkins) * 100.0, 1) if total_expected_checkins > 0 else 0.0
+
+    return {
+        "club": {
+            "id": target_club.id,
+            "name": target_club.name,
+            "code": target_club.code,
+            "campus_code": campuses_map.get(target_club.campus_id, "HI-Tech"),
+            "category": target_club.category,
+        },
+        "available_clubs": [
+            {"id": c.id, "name": c.name, "code": c.code, "campus_code": campuses_map.get(c.campus_id, "")}
+            for c in available_clubs
+        ],
+        "summary": {
+            "total_members": len(memberships),
+            "total_sessions": total_sessions_count,
+            "average_attendance_pct": avg_pct,
+            "perfect_attendance_count": perfect_count,
+            "low_attendance_count": low_count,
+        },
+        "sessions": sessions_list,
+        "members": member_roster,
+    }
+
+
+@app.get("/api/president/club-attendance/export-csv")
+def export_president_attendance_csv(
+    club_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    President Exclusive: Export member attendance roster as CSV.
+    """
+    data = get_president_club_attendance(club_id=club_id, db=db, current_user=current_user)
+    club = data.get("club")
+    club_name = club["name"] if club else "Club"
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([f"Member Attendance Roster - {club_name} ({club['code'] if club else ''})"])
+    writer.writerow(["Generated At", datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")])
+    writer.writerow([])
+    writer.writerow([
+        "Roll Number",
+        "Student Name",
+        "Email",
+        "Membership Tier",
+        "Total Sessions Held",
+        "Sessions Attended",
+        "Late Check-ins",
+        "Missed Sessions",
+        "Attendance %",
+        "Last Check-in Date",
+        "Last Session Topic"
+    ])
+    for m in data.get("members", []):
+        writer.writerow([
+            m["roll_number"],
+            m["full_name"],
+            m["email"],
+            m["tier"],
+            m["total_sessions"],
+            m["attended_sessions"],
+            m["late_sessions"],
+            m["missed_sessions"],
+            f"{m['attendance_percentage']}%",
+            m["last_attended_date"] or "Never",
+            m["last_session_topic"] or "N/A",
+        ])
+    output.seek(0)
+    filename = f"attendance_{club['code'] if club else 'club'}_{datetime.utcnow().strftime('%Y%m%d')}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 

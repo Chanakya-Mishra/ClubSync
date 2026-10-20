@@ -523,6 +523,10 @@ function applyRoleVisibility() {
   // 8. Club News Tab: Show "+ Post Club Announcement" for Club Presidents, Campus Managers, Admins, Advisors
   const canPostNews = ['PRESIDENT', 'COORDINATOR', 'CAMPUS_MGR', 'ADMIN', 'ADVISOR'].includes(role);
   document.getElementById('btn-post-news')?.classList.toggle('hidden', !canPostNews);
+
+  // 9. Attendance Tab: Dedicated only for Club Presidents and Leadership
+  const isPresident = ['PRESIDENT', 'COORDINATOR', 'CAMPUS_MGR', 'ADMIN'].includes(role);
+  document.getElementById('tab-btn-attendance')?.classList.toggle('hidden', !isPresident);
 }
 
 async function enterApp() {
@@ -646,7 +650,10 @@ function switchTab(tabName) {
   if (tabName === 'admin' && currentUser && !['ADMIN', 'CAMPUS_MGR', 'ADVISOR'].includes(currentUser.role)) {
     tabName = 'dashboard';
   }
-  const tabs = ['dashboard', 'clubs', 'sessions', 'events', 'stretch', 'certificates', 'news', 'admin'];
+  if (tabName === 'attendance' && currentUser && !['PRESIDENT', 'COORDINATOR', 'CAMPUS_MGR', 'ADMIN'].includes(currentUser.role)) {
+    tabName = 'dashboard';
+  }
+  const tabs = ['dashboard', 'clubs', 'sessions', 'events', 'stretch', 'certificates', 'news', 'admin', 'attendance'];
   tabs.forEach((t) => {
     document.getElementById(`tab-${t}`)?.classList.toggle('hidden', t !== tabName);
     const btn = document.getElementById(`tab-btn-${t}`);
@@ -670,6 +677,7 @@ function switchTab(tabName) {
   if (tabName === 'certificates') loadCertificates();
   if (tabName === 'news') loadClubNews();
   if (tabName === 'admin') loadAdminCenter();
+  if (tabName === 'attendance') loadPresidentAttendance();
 }
 
 // ============================================================================
@@ -678,6 +686,60 @@ function switchTab(tabName) {
 
 function renderDashboardOverview(data) {
   if (!data) return;
+
+  // 1. Personal Attendance Card (for all accounts)
+  if (data.my_attendance) {
+    const ma = data.my_attendance;
+    const pctEl = document.getElementById('dash-my-att-pct');
+    if (pctEl) pctEl.textContent = `${ma.attendance_percentage}%`;
+    const countEl = document.getElementById('dash-my-att-count');
+    if (countEl) countEl.textContent = `${ma.attended_sessions} of ${ma.total_sessions} sessions attended`;
+    const presEl = document.getElementById('dash-my-att-present');
+    if (presEl) presEl.textContent = ma.present_count;
+    const lateEl = document.getElementById('dash-my-att-late');
+    if (lateEl) lateEl.textContent = ma.late_count;
+    const barEl = document.getElementById('dash-my-att-bar');
+    if (barEl) barEl.style.width = `${Math.min(100, Math.max(0, ma.attendance_percentage))}%`;
+
+    const standingEl = document.getElementById('dash-my-att-standing');
+    if (standingEl) {
+      if (ma.standing === 'EXCELLENT') {
+        standingEl.className = 'px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200';
+        standingEl.textContent = 'Excellent (90%+)';
+      } else if (ma.standing === 'GOOD_STANDING') {
+        standingEl.className = 'px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200';
+        standingEl.textContent = 'Good Standing';
+      } else {
+        standingEl.className = 'px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200';
+        standingEl.textContent = 'Attendance Warning';
+      }
+    }
+  }
+
+  // 2. President Club Attendance Card (visible to Presidents / Coordinators / Leadership)
+  const presCard = document.getElementById('dash-president-attendance-card');
+  if (presCard) {
+    const ps = data.president_club_summary;
+    const isLeadership = currentUser && ['PRESIDENT', 'COORDINATOR', 'CAMPUS_MGR', 'ADMIN'].includes(currentUser.role);
+    if (ps && isLeadership) {
+      presCard.classList.remove('hidden');
+      const titleEl = document.getElementById('dash-pres-club-title');
+      if (titleEl) titleEl.textContent = `${ps.club_name} (${ps.club_code})`;
+      const metaEl = document.getElementById('dash-pres-club-meta');
+      if (metaEl) metaEl.textContent = `President Attendance Dashboard • ${ps.total_members} Members`;
+      const pctEl = document.getElementById('dash-pres-club-pct');
+      if (pctEl) pctEl.textContent = `${ps.overall_attendance_pct}%`;
+      const memEl = document.getElementById('dash-pres-club-members');
+      if (memEl) memEl.textContent = ps.total_members;
+      const sessEl = document.getElementById('dash-pres-club-sessions');
+      if (sessEl) sessEl.textContent = ps.total_sessions;
+      const checkinEl = document.getElementById('dash-pres-club-checkins');
+      if (checkinEl) checkinEl.textContent = ps.verified_checkins;
+    } else {
+      presCard.classList.add('hidden');
+    }
+  }
+
   const cardsEl = document.getElementById('dash-campus-cards');
   if (cardsEl && data.campus_breakdown) {
     cardsEl.innerHTML = data.campus_breakdown
@@ -2766,6 +2828,179 @@ async function deleteClubNews(newsId) {
   } catch (err) {
     showToast(err.message, true);
   }
+}
+
+// ============================================================================
+// TAB 8: President Exclusive Member Attendance Tracker
+// ============================================================================
+
+let currentPresidentAttendanceData = null;
+
+async function loadPresidentAttendance(clubId = '') {
+  try {
+    const url = `/api/president/club-attendance${clubId ? `?club_id=${clubId}` : ''}`;
+    const cacheKey = `pres_attendance_${clubId || 'default'}`;
+
+    swrFetch(cacheKey, url, {}, (data) => {
+      currentPresidentAttendanceData = data;
+      renderPresidentAttendance(data);
+    });
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+function renderPresidentAttendance(data) {
+  if (!data) return;
+
+  // 1. Populate Club Selector
+  const clubSelect = document.getElementById('pres-att-club-select');
+  if (clubSelect && data.available_clubs) {
+    clubSelect.innerHTML = data.available_clubs
+      .map(
+        (c) => `<option value="${c.id}" ${data.club && c.id === data.club.id ? 'selected' : ''}>${c.name} (${c.code}) - ${c.campus_code}</option>`
+      )
+      .join('');
+  }
+
+  // 2. Populate 5 KPI Cards
+  const summary = data.summary || {};
+  const totMemEl = document.getElementById('pres-att-total-members');
+  if (totMemEl) totMemEl.textContent = summary.total_members || 0;
+  const totSessEl = document.getElementById('pres-att-total-sessions');
+  if (totSessEl) totSessEl.textContent = summary.total_sessions || 0;
+  const avgPctEl = document.getElementById('pres-att-avg-pct');
+  if (avgPctEl) avgPctEl.textContent = `${summary.average_attendance_pct || 0}%`;
+  const perfEl = document.getElementById('pres-att-perfect-count');
+  if (perfEl) perfEl.textContent = summary.perfect_attendance_count || 0;
+  const lowEl = document.getElementById('pres-att-low-count');
+  if (lowEl) lowEl.textContent = summary.low_attendance_count || 0;
+
+  // 3. Render Member Roster
+  renderPresidentAttendanceMembers(data.members || []);
+
+  // 4. Render Sessions Turnout
+  renderPresidentAttendanceSessions(data.sessions || []);
+}
+
+function renderPresidentAttendanceMembers(members) {
+  const tbody = document.getElementById('pres-att-table-body');
+  const badge = document.getElementById('pres-att-table-badge');
+  if (badge) badge.textContent = `${members.length} member${members.length === 1 ? '' : 's'}`;
+  if (!tbody) return;
+
+  if (!members || !members.length) {
+    tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-slate-400">No members registered in this club roster yet.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = members
+    .map((m) => {
+      let badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      let badgeText = 'Good Standing';
+      if (m.attendance_percentage >= 90) {
+        badgeClass = 'bg-blue-50 text-blue-700 border-blue-200';
+        badgeText = 'Excellent (90%+)';
+      } else if (m.attendance_percentage < 75 && m.total_sessions > 0) {
+        badgeClass = 'bg-rose-50 text-rose-700 border-rose-200';
+        badgeText = 'At-Risk (<75%)';
+      }
+
+      let tierBadgeClass = 'bg-slate-100 text-slate-700';
+      if (m.tier === 'PRIMARY') tierBadgeClass = 'bg-indigo-50 text-indigo-700 border border-indigo-200';
+      if (m.tier === 'PRESIDENT' || m.tier === 'COORDINATOR') tierBadgeClass = 'bg-amber-50 text-amber-800 border border-amber-200';
+
+      return `
+        <tr class="hover:bg-white/40 transition">
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold text-xs flex items-center justify-center shrink-0">
+                ${m.full_name ? m.full_name.charAt(0).toUpperCase() : '?'}
+              </div>
+              <div>
+                <div class="font-bold text-slate-900">${m.full_name}</div>
+                <div class="text-[11px] text-slate-400">${m.email}</div>
+              </div>
+            </div>
+          </td>
+          <td class="px-4 py-3 font-mono text-slate-600 font-medium">${m.roll_number}</td>
+          <td class="px-4 py-3">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${tierBadgeClass}">${m.tier}</span>
+          </td>
+          <td class="px-4 py-3 text-center font-semibold text-slate-700">${m.total_sessions}</td>
+          <td class="px-4 py-3 text-center">
+            <span class="font-bold text-emerald-600">${m.attended_sessions}</span>
+            ${m.late_sessions > 0 ? `<span class="text-[10px] text-amber-600 ml-1">(${m.late_sessions} late)</span>` : ''}
+          </td>
+          <td class="px-4 py-3 text-center font-semibold text-slate-500">${m.missed_sessions}</td>
+          <td class="px-4 py-3 text-center">
+            <div class="font-black text-xs ${m.attendance_percentage >= 75 ? 'text-emerald-600' : 'text-rose-600'}">
+              ${m.attendance_percentage}%
+            </div>
+            <div class="w-16 bg-slate-100 rounded-full h-1.5 mx-auto mt-1 overflow-hidden">
+              <div class="h-1.5 rounded-full ${m.attendance_percentage >= 75 ? 'bg-emerald-500' : 'bg-rose-500'}" style="width: ${Math.min(100, m.attendance_percentage)}%"></div>
+            </div>
+          </td>
+          <td class="px-4 py-3 text-slate-600 text-[11px]">
+            ${m.last_attended_date ? `<div>${m.last_attended_date}</div><div class="text-[10px] text-slate-400 truncate max-w-[120px]">${m.last_session_topic || ''}</div>` : '<span class="text-slate-400">Never checked in</span>'}
+          </td>
+          <td class="px-4 py-3 text-center">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeClass}">${badgeText}</span>
+          </td>
+        </tr>
+      `;
+    })
+    .join('');
+}
+
+function renderPresidentAttendanceSessions(sessions) {
+  const tbody = document.getElementById('pres-att-sessions-body');
+  if (!tbody) return;
+
+  if (!sessions || !sessions.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">No sessions conducted for this club yet.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = sessions
+    .map((s) => `
+      <tr class="hover:bg-white/40 transition">
+        <td class="px-4 py-3 font-semibold text-slate-900">${s.topic}</td>
+        <td class="px-4 py-3 text-slate-600">${s.scheduled_date}</td>
+        <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">${s.format}</span></td>
+        <td class="px-4 py-3">
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${s.checkin_status === 'OPEN' ? 'bg-emerald-50 text-emerald-700 animate-pulse' : 'bg-slate-100 text-slate-600'}">
+            ${s.checkin_status}
+          </span>
+        </td>
+        <td class="px-4 py-3 text-center font-bold text-slate-800">${s.present_count} / ${s.total_expected}</td>
+        <td class="px-4 py-3 text-center">
+          <span class="font-black text-xs ${s.attendance_pct >= 75 ? 'text-emerald-600' : 'text-slate-700'}">${s.attendance_pct}%</span>
+        </td>
+      </tr>
+    `)
+    .join('');
+}
+
+function filterPresidentAttendanceTable() {
+  if (!currentPresidentAttendanceData || !currentPresidentAttendanceData.members) return;
+  const q = (document.getElementById('pres-att-search')?.value || '').toLowerCase().trim();
+  const tier = document.getElementById('pres-att-tier-filter')?.value || '';
+
+  const filtered = currentPresidentAttendanceData.members.filter((m) => {
+    const matchesQ = !q || m.full_name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q) || (m.roll_number && m.roll_number.toLowerCase().includes(q));
+    const matchesTier = !tier || m.tier === tier;
+    return matchesQ && matchesTier;
+  });
+
+  renderPresidentAttendanceMembers(filtered);
+}
+
+function exportPresidentAttendanceCsv() {
+  const clubSelect = document.getElementById('pres-att-club-select');
+  const clubId = clubSelect ? clubSelect.value : '';
+  const url = `/api/president/club-attendance/export-csv${clubId ? `?club_id=${clubId}` : ''}`;
+  window.open(url, '_blank');
 }
 
 // ============================================================================

@@ -567,6 +567,12 @@
           <span>Club News</span>
           <span class="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
         </button>
+        <button onclick="switchTab('attendance')" id="tab-btn-attendance" class="hidden py-3 px-2 whitespace-nowrap text-slate-600 hover:text-indigo-600 flex items-center gap-1.5 font-semibold">
+          <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>Attendance</span>
+        </button>
         <button onclick="switchTab('admin')" id="tab-btn-admin" class="py-3 px-2 whitespace-nowrap text-slate-600 hover:text-indigo-600 flex items-center gap-1.5">
           <span id="tab-admin-label">Admin Command Center</span>
           <span id="admin-pending-badge" class="hidden px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">0</span>
@@ -596,6 +602,74 @@
             <a id="btn-export-csv" href="/api/reports/export-csv" target="_blank" class="px-3.5 py-1.5 rounded-xl btn-gradient text-xs font-semibold">
               Export CSV Report
             </a>
+          </div>
+        </div>
+
+        <!-- Real-Time Attendance Statistics Section (Personal Student Attendance & President Hub) -->
+        <div id="dash-attendance-section" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- My Personal Attendance Card -->
+          <div id="dash-my-attendance-card" class="glass-card rounded-2xl p-5 border-l-4 border-emerald-500 flex flex-col justify-between space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center font-bold text-sm">✓</div>
+                <div>
+                  <h3 class="text-sm font-bold text-slate-900">My Attendance Overview</h3>
+                  <p class="text-[11px] text-slate-500">Live attendance percentage across your club sessions</p>
+                </div>
+              </div>
+              <span id="dash-my-att-standing" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Good Standing</span>
+            </div>
+            <div class="flex items-end justify-between pt-1">
+              <div>
+                <div class="text-3xl font-black text-slate-900" id="dash-my-att-pct">100%</div>
+                <div class="text-xs text-slate-500 mt-0.5" id="dash-my-att-count">0 of 0 sessions attended</div>
+              </div>
+              <div class="text-right text-xs text-slate-500 space-y-0.5">
+                <div>Present: <strong class="text-emerald-600 font-bold" id="dash-my-att-present">0</strong></div>
+                <div>Late: <strong class="text-amber-600 font-bold" id="dash-my-att-late">0</strong></div>
+              </div>
+            </div>
+            <!-- Progress Bar -->
+            <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+              <div id="dash-my-att-bar" class="bg-gradient-to-r from-emerald-500 to-teal-500 h-2 rounded-full transition-all duration-500" style="width: 100%"></div>
+            </div>
+          </div>
+
+          <!-- President Club Attendance Overview (Visible to Presidents / Coordinators / Leadership) -->
+          <div id="dash-president-attendance-card" class="hidden glass-card rounded-2xl p-5 border-l-4 border-indigo-500 flex flex-col justify-between space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-200 flex items-center justify-center font-bold text-sm">👥</div>
+                <div>
+                  <h3 class="text-sm font-bold text-slate-900" id="dash-pres-club-title">Club Attendance Portal</h3>
+                  <p class="text-[11px] text-slate-500" id="dash-pres-club-meta">President Leadership Dashboard</p>
+                </div>
+              </div>
+              <button onclick="switchTab('attendance')" class="px-2.5 py-1 rounded-lg btn-gradient text-white text-[11px] font-semibold flex items-center gap-1">
+                <span>Member Roster</span>
+                <span>→</span>
+              </button>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-center pt-1">
+              <div class="bg-white/60 rounded-xl p-2 border border-white/60">
+                <div class="text-[11px] text-slate-500">Club Turnout</div>
+                <div class="text-base font-black text-indigo-600 mt-0.5" id="dash-pres-club-pct">--%</div>
+              </div>
+              <div class="bg-white/60 rounded-xl p-2 border border-white/60">
+                <div class="text-[11px] text-slate-500">Total Members</div>
+                <div class="text-base font-black text-slate-800 mt-0.5" id="dash-pres-club-members">0</div>
+              </div>
+              <div class="bg-white/60 rounded-xl p-2 border border-white/60">
+                <div class="text-[11px] text-slate-500">Sessions</div>
+                <div class="text-base font-black text-slate-800 mt-0.5" id="dash-pres-club-sessions">0</div>
+              </div>
+            </div>
+            <div class="text-[11px] text-slate-500 flex items-center justify-between pt-1">
+              <span>Verified Check-ins: <strong id="dash-pres-club-checkins" class="text-slate-800 font-semibold">0</strong></span>
+              <button onclick="switchTab('attendance')" class="text-indigo-600 font-semibold hover:underline">
+                View Member Breakdown →
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1167,6 +1241,119 @@
                 </tr>
               </thead>
               <tbody id="admin-audit-tbody" class="divide-y divide-slate-200/50"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================= -->
+      <!-- TAB 8: PRESIDENT EXCLUSIVE: MEMBER ATTENDANCE ROSTER              -->
+      <!-- ================================================================= -->
+      <section id="tab-attendance" class="hidden space-y-6 animate-enter">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 class="text-xl font-extrabold text-slate-900">Club Member <span class="gradient-text">Attendance</span></h2>
+              <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">President Exclusive</span>
+            </div>
+            <p class="text-xs text-slate-600">Track real-time check-in records, individual attendance percentages, and participation history of every club member.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <select id="pres-att-club-select" onchange="loadPresidentAttendance(this.value)" class="rounded-xl glass-input px-3 py-1.5 text-xs font-semibold">
+              <option value="">Loading Club...</option>
+            </select>
+            <button onclick="exportPresidentAttendanceCsv()" class="px-3.5 py-1.5 rounded-xl btn-gradient text-xs font-semibold flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              <span>Export CSV</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 5 High-Impact KPI Cards -->
+        <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div class="glass-card rounded-2xl p-4">
+            <div class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Total Members</div>
+            <div id="pres-att-total-members" class="text-2xl font-black text-slate-900 mt-1">0</div>
+            <div class="text-[11px] text-slate-400 mt-0.5">Approved club members</div>
+          </div>
+          <div class="glass-card rounded-2xl p-4">
+            <div class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Sessions Held</div>
+            <div id="pres-att-total-sessions" class="text-2xl font-black text-indigo-600 mt-1">0</div>
+            <div class="text-[11px] text-slate-400 mt-0.5">Conducted sessions</div>
+          </div>
+          <div class="glass-card rounded-2xl p-4">
+            <div class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Avg Attendance</div>
+            <div id="pres-att-avg-pct" class="text-2xl font-black text-emerald-600 mt-1">0%</div>
+            <div class="text-[11px] text-slate-400 mt-0.5">Overall club rate</div>
+          </div>
+          <div class="glass-card rounded-2xl p-4">
+            <div class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Perfect (100%)</div>
+            <div id="pres-att-perfect-count" class="text-2xl font-black text-blue-600 mt-1">0</div>
+            <div class="text-[11px] text-slate-400 mt-0.5">Attended all sessions</div>
+          </div>
+          <div class="glass-card rounded-2xl p-4">
+            <div class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">At-Risk (&lt;75%)</div>
+            <div id="pres-att-low-count" class="text-2xl font-black text-rose-600 mt-1">0</div>
+            <div class="text-[11px] text-slate-400 mt-0.5">Needs intervention</div>
+          </div>
+        </div>
+
+        <!-- Member Attendance Table -->
+        <div class="glass-card rounded-2xl overflow-hidden">
+          <div class="px-5 py-3.5 border-b border-white/60 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <h3 class="text-sm font-bold text-slate-800">Member Attendance Breakdown</h3>
+              <span id="pres-att-table-badge" class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600">0 members</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="text" id="pres-att-search" oninput="filterPresidentAttendanceTable()" placeholder="Search by name, roll..." class="rounded-xl glass-input px-3 py-1 text-xs w-48" />
+              <select id="pres-att-tier-filter" onchange="filterPresidentAttendanceTable()" class="rounded-xl glass-input px-2.5 py-1 text-xs">
+                <option value="">All Tiers</option>
+                <option value="PRIMARY">Primary Only</option>
+                <option value="SECONDARY">Secondary Only</option>
+                <option value="COORDINATOR">Coordinators</option>
+                <option value="PRESIDENT">Presidents</option>
+              </select>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-white/50 text-slate-600 uppercase">
+                <tr>
+                  <th class="px-4 py-3">Member</th>
+                  <th class="px-4 py-3">Roll / ID</th>
+                  <th class="px-4 py-3">Tier</th>
+                  <th class="px-4 py-3 text-center">Sessions Held</th>
+                  <th class="px-4 py-3 text-center">Attended</th>
+                  <th class="px-4 py-3 text-center">Missed</th>
+                  <th class="px-4 py-3 text-center">Attendance %</th>
+                  <th class="px-4 py-3">Last Check-in</th>
+                  <th class="px-4 py-3 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody id="pres-att-table-body" class="divide-y divide-slate-200/50"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Recent Sessions Turnout Breakdown -->
+        <div class="glass-card rounded-2xl overflow-hidden">
+          <div class="px-5 py-3.5 border-b border-white/60 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-slate-800">Recent Club Sessions & Turnout</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-white/50 text-slate-600 uppercase">
+                <tr>
+                  <th class="px-4 py-3">Session Topic</th>
+                  <th class="px-4 py-3">Date</th>
+                  <th class="px-4 py-3">Format</th>
+                  <th class="px-4 py-3">Check-in Status</th>
+                  <th class="px-4 py-3 text-center">Present / Expected</th>
+                  <th class="px-4 py-3 text-center">Turnout %</th>
+                </tr>
+              </thead>
+              <tbody id="pres-att-sessions-body" class="divide-y divide-slate-200/50"></tbody>
             </table>
           </div>
         </div>
