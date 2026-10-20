@@ -1,4 +1,4 @@
-let authToken = sessionStorage.getItem('clubsync_token') || '';
+let authToken = sessionStorage.getItem('clubsync_token') || localStorage.getItem('clubsync_token') || '';
 let currentUser = null;
 let campusesList = [];
 let allUsersList = [];
@@ -7,6 +7,69 @@ let eventsList = [];
 let activeSessionIdForDetail = null;
 let qrIntervalTimer = null;
 let currentLiveQrPayload = null;
+
+// ============================================================================
+// SWR (Stale-While-Revalidate) Instant Cache Engine
+// ============================================================================
+const SWR_PREFIX = 'clubsync_swr_';
+
+function getSwr(key) {
+  try {
+    const raw = localStorage.getItem(SWR_PREFIX + key);
+    if (!raw) return null;
+    const item = JSON.parse(raw);
+    return item ? item.data : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function setSwr(key, data) {
+  try {
+    localStorage.setItem(SWR_PREFIX + key, JSON.stringify({ data, ts: Date.now() }));
+  } catch (_) {}
+}
+
+function clearSwr(key) {
+  try {
+    if (key) {
+      localStorage.removeItem(SWR_PREFIX + key);
+    } else {
+      Object.keys(localStorage).forEach((k) => {
+        if (k.startsWith(SWR_PREFIX)) localStorage.removeItem(k);
+      });
+    }
+  } catch (_) {}
+}
+
+/**
+ * High-performance SWR fetcher:
+ * 1. If cached data exists in localStorage, fires onData(cachedData, true) in 0ms.
+ * 2. Asynchronously fetches latest data from the API in background.
+ * 3. If fresh data differs from cache, updates cache and re-fires onData(freshData, false).
+ */
+async function swrFetch(key, path, options = {}, onData = null) {
+  const cached = getSwr(key);
+  if (cached !== null && onData) {
+    onData(cached, true);
+  }
+
+  try {
+    const freshData = await apiFetch(path, options);
+    const freshStr = JSON.stringify(freshData);
+    const cachedStr = cached !== null ? JSON.stringify(cached) : null;
+    setSwr(key, freshData);
+    if (onData && freshStr !== cachedStr) {
+      onData(freshData, false);
+    }
+    return freshData;
+  } catch (err) {
+    if (cached !== null) {
+      return cached;
+    }
+    throw err;
+  }
+}
 
 // ============================================================================
 // API Helper & Toast Notification
@@ -283,14 +346,13 @@ function showAuthSuccess(msg) {
   el.classList.remove('hidden');
 }
 
-async function loadCampuses() {
-  if (campusesList.length > 0) return campusesList;
-  campusesList = await apiFetch('/api/campuses');
+function populateCampusSelects(list) {
+  if (!list || !list.length) return;
   const selects = ['reg-campus', 'club-campus', 'adm-user-campus'];
   selects.forEach((id) => {
     const el = document.getElementById(id);
     if (el) {
-      el.innerHTML = campusesList
+      el.innerHTML = list
         .map((c) => `<option value="${c.id}">${c.code} (${c.city})</option>`)
         .join('');
     }
@@ -301,8 +363,20 @@ async function loadCampuses() {
     if (el) {
       el.innerHTML =
         `<option value="">All Campuses</option>` +
-        campusesList.map((c) => `<option value="${c.id}">${c.code}</option>`).join('');
+        list.map((c) => `<option value="${c.id}">${c.code}</option>`).join('');
     }
+  });
+}
+
+async function loadCampuses() {
+  const cached = getSwr('campuses');
+  if (cached && cached.length) {
+    campusesList = cached;
+    populateCampusSelects(campusesList);
+  }
+  return swrFetch('campuses', '/api/campuses', {}, (fresh) => {
+    campusesList = fresh;
+    populateCampusSelects(campusesList);
   });
 }
 
@@ -317,8 +391,9 @@ async function handleLogin(e) {
     });
     authToken = data.token;
     sessionStorage.setItem('clubsync_token', authToken);
-    localStorage.removeItem('clubsync_token');
+    localStorage.setItem('clubsync_token', authToken);
     currentUser = data.user;
+    setSwr('currentUser', currentUser);
     // Clear password input immediately after successful authentication
     const passInput = document.getElementById('login-password');
     if (passInput) passInput.value = '';
@@ -355,8 +430,9 @@ async function handleRegister(e) {
 
     authToken = data.token;
     sessionStorage.setItem('clubsync_token', authToken);
-    localStorage.removeItem('clubsync_token');
+    localStorage.setItem('clubsync_token', authToken);
     currentUser = data.user;
+    setSwr('currentUser', currentUser);
     await enterApp();
   } catch (err) {
     showAuthError(err.message);
@@ -368,6 +444,7 @@ function handleLogout() {
   currentUser = null;
   sessionStorage.removeItem('clubsync_token');
   localStorage.removeItem('clubsync_token');
+  clearSwr();
 
   // Clear all login input fields so browser does not retain or auto-submit
   const emailInput = document.getElementById('login-email');
@@ -443,9 +520,10 @@ async function enterApp() {
   document.getElementById('nav-role-badge').textContent = currentUser.role;
 
   applyRoleVisibility();
-  await refreshUsersAndClubsSelectors();
-  await refreshPendingBadge();
-  switchTab('dashboard');
+  switchTab('dashboard'); // Instant view transition in 0ms!
+  // Run background updates asynchronously without blocking user view
+  refreshUsersAndClubsSelectors();
+  refreshPendingBadge();
 }
 
 let _selectorsCacheTime = 0;
@@ -583,75 +661,80 @@ function switchTab(tabName) {
 // TAB 1: Dashboard & Reports
 // ============================================================================
 
-async function loadDashboard() {
-  const campusId = document.getElementById('dash-campus-filter')?.value || '';
-  const data = await apiFetch(`/api/dashboard/overview${campusId ? `?campus_id=${campusId}` : ''}`);
-
-  document.getElementById('dash-campus-cards').innerHTML = data.campus_breakdown
-    .map(
-      (c) => `
-      <div class="glass-subcard rounded-xl p-4 space-y-2">
-        <div class="flex items-center justify-between">
-          <span class="font-bold text-sm text-slate-900">${c.campus_code}</span>
-          <span class="text-xs font-semibold text-blue-600">${c.participation_rate_pct}% Active</span>
-        </div>
-        <div class="grid grid-cols-2 gap-2 text-xs text-slate-600 pt-1">
-          <div>Clubs: <strong class="text-slate-900">${c.active_clubs}/${c.total_clubs}</strong></div>
-          <div>Students: <strong class="text-slate-900">${c.total_students}</strong></div>
-          <div>Check-ins: <strong class="text-slate-900">${c.verified_checkins}</strong></div>
-          <div>Submissions: <strong class="text-slate-900">${c.deliverables_submitted}</strong></div>
-        </div>
-      </div>
-    `
-    )
-    .join('');
-
-  const tbody = document.getElementById('dash-monthly-tbody');
-  if (!data.monthly_club_reports.length) {
-    tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-6 text-center text-slate-400">No clubs registered yet.</td></tr>`;
-  } else {
-    tbody.innerHTML = data.monthly_club_reports
+function renderDashboardOverview(data) {
+  if (!data) return;
+  const cardsEl = document.getElementById('dash-campus-cards');
+  if (cardsEl && data.campus_breakdown) {
+    cardsEl.innerHTML = data.campus_breakdown
       .map(
-        (r) => `
-        <tr>
-          <td class="px-4 py-3 font-semibold text-slate-900">${r.club_name} <span class="text-slate-400 font-normal">(${r.club_code})</span></td>
-          <td class="px-4 py-3">${r.campus_code}</td>
-          <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${r.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">${r.status}</span></td>
-          <td class="px-4 py-3">${r.approved_members}</td>
-          <td class="px-4 py-3">${r.sessions_conducted}</td>
-          <td class="px-4 py-3 font-semibold">${r.attendance_percentage}%</td>
-          <td class="px-4 py-3">${r.total_submissions}</td>
-          <td class="px-4 py-3 font-semibold text-blue-600">${r.average_rubric_score}</td>
-        </tr>
+        (c) => `
+        <div class="glass-subcard rounded-xl p-4 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-sm text-slate-900">${c.campus_code}</span>
+            <span class="text-xs font-semibold text-blue-600">${c.participation_rate_pct}% Active</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-xs text-slate-600 pt-1">
+            <div>Clubs: <strong class="text-slate-900">${c.active_clubs}/${c.total_clubs}</strong></div>
+            <div>Students: <strong class="text-slate-900">${c.total_students}</strong></div>
+            <div>Check-ins: <strong class="text-slate-900">${c.verified_checkins}</strong></div>
+            <div>Submissions: <strong class="text-slate-900">${c.deliverables_submitted}</strong></div>
+          </div>
+        </div>
       `
       )
       .join('');
+  }
+
+  const tbody = document.getElementById('dash-monthly-tbody');
+  if (tbody && data.monthly_club_reports) {
+    if (!data.monthly_club_reports.length) {
+      tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-6 text-center text-slate-400">No clubs registered yet.</td></tr>`;
+    } else {
+      tbody.innerHTML = data.monthly_club_reports
+        .map(
+          (r) => `
+          <tr>
+            <td class="px-4 py-3 font-semibold text-slate-900">${r.club_name} <span class="text-slate-400 font-normal">(${r.club_code})</span></td>
+            <td class="px-4 py-3">${r.campus_code}</td>
+            <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${r.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">${r.status}</span></td>
+            <td class="px-4 py-3">${r.approved_members}</td>
+            <td class="px-4 py-3">${r.sessions_conducted}</td>
+            <td class="px-4 py-3 font-semibold">${r.attendance_percentage}%</td>
+            <td class="px-4 py-3">${r.total_submissions}</td>
+            <td class="px-4 py-3 font-semibold text-blue-600">${r.average_rubric_score}</td>
+          </tr>
+        `
+        )
+        .join('');
+    }
   }
 
   const topEl = document.getElementById('dash-top-students');
-  if (!data.top_contributors.length) {
-    topEl.innerHTML = `<p class="text-slate-400">No student activity recorded yet.</p>`;
-  } else {
-    topEl.innerHTML = data.top_contributors
-      .map(
-        (s, i) => `
-        <div class="flex items-center justify-between py-2 border-b border-slate-100">
-          <div>
-            <span class="font-bold text-slate-700 mr-2">#${i + 1}</span>
-            <span class="font-semibold text-slate-900">${s.full_name}</span>
-            <span class="text-slate-400 ml-1">(${s.campus_code})</span>
+  if (topEl && data.top_contributors) {
+    if (!data.top_contributors.length) {
+      topEl.innerHTML = `<p class="text-slate-400">No student activity recorded yet.</p>`;
+    } else {
+      topEl.innerHTML = data.top_contributors
+        .map(
+          (s, i) => `
+          <div class="flex items-center justify-between py-2 border-b border-slate-100">
+            <div>
+              <span class="font-bold text-slate-700 mr-2">#${i + 1}</span>
+              <span class="font-semibold text-slate-900">${s.full_name}</span>
+              <span class="text-slate-400 ml-1">(${s.campus_code})</span>
+            </div>
+            <div class="text-slate-600">
+              ${s.sessions_attended} Sessions • <strong class="text-blue-600">${s.cumulative_rubric_score} pts</strong>
+            </div>
           </div>
-          <div class="text-slate-600">
-            ${s.sessions_attended} Sessions • <strong class="text-blue-600">${s.cumulative_rubric_score} pts</strong>
-          </div>
-        </div>
-      `
-      )
-      .join('');
+        `
+        )
+        .join('');
+    }
   }
 
   const alertsEl = document.getElementById('dash-alerts');
-  if (alertsEl) {
+  if (alertsEl && data.inactive_clubs && data.zero_participation_students) {
     const inactiveHtml = data.inactive_clubs.map(
       (c) => `<div class="p-2.5 rounded-lg bg-amber-50 text-amber-800">Club <strong>${c.name}</strong> (${c.campus_code}): ${c.reason}</div>`
     );
@@ -660,12 +743,13 @@ async function loadDashboard() {
       .map((s) => `<div class="p-2.5 rounded-lg bg-slate-100 text-slate-700">Student <strong>${s.full_name}</strong> (${s.campus_code}): 0 sessions & 0 events</div>`);
     alertsEl.innerHTML = [...inactiveHtml, ...zeroHtml].join('') || `<p class="text-slate-400">No inactive clubs or zero-participation alerts.</p>`;
   }
+}
 
-  // Pending Student Account Requests (Fast approval directly from Dashboard for Campus Manager / Admin)
+async function refreshDashboardPendingBanner() {
   const banner = document.getElementById('dash-pending-students-banner');
   const countEl = document.getElementById('dash-pending-count');
   const listEl = document.getElementById('dash-pending-students-list');
-  if (banner && (currentUser.role === 'CAMPUS_MGR' || currentUser.role === 'ADMIN')) {
+  if (banner && currentUser && (currentUser.role === 'CAMPUS_MGR' || currentUser.role === 'ADMIN')) {
     try {
       const queue = await fetchPendingQueue();
       const pendingStudents = queue.pending_accounts || [];
@@ -705,28 +789,37 @@ async function loadDashboard() {
   }
 }
 
+async function loadDashboard() {
+  const campusId = document.getElementById('dash-campus-filter')?.value || '';
+  const cacheKey = `dash_overview_${campusId || 'all'}`;
+  const url = `/api/dashboard/overview${campusId ? `?campus_id=${campusId}` : ''}`;
+
+  swrFetch(cacheKey, url, {}, (data) => {
+    renderDashboardOverview(data);
+  });
+
+  refreshDashboardPendingBanner();
+}
+
 // ============================================================================
 // TAB 2: Clubs & Enrolment
 // ============================================================================
 
-async function loadClubs() {
-  const campusId = document.getElementById('clubs-campus-filter')?.value || '';
-  clubsList = await apiFetch(`/api/clubs${campusId ? `?campus_id=${campusId}` : ''}`);
-  await refreshUsersAndClubsSelectors();
-
+function renderClubsGrid(list) {
   const grid = document.getElementById('clubs-grid');
-  if (!clubsList.length) {
+  if (!grid) return;
+  if (!list || !list.length) {
     grid.innerHTML = `<div class="col-span-full glass-card rounded-2xl p-8 text-center text-slate-500 text-sm">No clubs available yet.</div>`;
     return;
   }
 
-  const canManageClub = currentUser.role === 'ADMIN' || currentUser.role === 'CAMPUS_MGR' || currentUser.role === 'ADVISOR';
+  const canManageClub = currentUser && (currentUser.role === 'ADMIN' || currentUser.role === 'CAMPUS_MGR' || currentUser.role === 'ADVISOR');
   const studentOptions = allUsersList
     .filter((u) => u.account_status === 'APPROVED')
     .map((u) => `<option value="${u.id}">${u.full_name} (${u.role})</option>`)
     .join('');
 
-  grid.innerHTML = clubsList
+  grid.innerHTML = list
     .map((c) => {
       const myStatus = c.my_membership
         ? `<span class="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">My Membership: ${c.my_membership.tier} (${c.my_membership.status})</span>`
@@ -787,6 +880,18 @@ async function loadClubs() {
       `;
     })
     .join('');
+}
+
+async function loadClubs() {
+  const campusId = document.getElementById('clubs-campus-filter')?.value || '';
+  const cacheKey = `clubs_list_${campusId || 'all'}`;
+  const url = `/api/clubs${campusId ? `?campus_id=${campusId}` : ''}`;
+
+  swrFetch(cacheKey, url, {}, (list) => {
+    clubsList = list;
+    renderClubsGrid(clubsList);
+  });
+  refreshUsersAndClubsSelectors();
 }
 
 async function submitCreateClub(e) {
@@ -956,16 +1061,16 @@ async function submitPlanSession(e) {
   }
 }
 
-async function loadSessions() {
-  const sessions = await apiFetch('/api/sessions');
+function renderSessionsList(sessions) {
   const container = document.getElementById('sessions-list');
-  if (!sessions.length) {
+  if (!container) return;
+  if (!sessions || !sessions.length) {
     container.innerHTML = `<div class="glass-card rounded-2xl p-8 text-center text-slate-500 text-sm">No Club Day sessions scheduled yet.</div>`;
     return;
   }
 
-  const isAdvisorOrAdmin = ['ADVISOR', 'CAMPUS_MGR', 'ADMIN'].includes(currentUser.role);
-  const isStaffOrCoord = currentUser.role !== 'STUDENT';
+  const isAdvisorOrAdmin = currentUser && ['ADVISOR', 'CAMPUS_MGR', 'ADMIN'].includes(currentUser.role);
+  const isStaffOrCoord = currentUser && currentUser.role !== 'STUDENT';
 
   container.innerHTML = sessions
     .map((s) => {
@@ -1042,6 +1147,12 @@ async function loadSessions() {
       `;
     })
     .join('');
+}
+
+async function loadSessions() {
+  swrFetch('sessions_list', '/api/sessions', {}, (sessions) => {
+    renderSessionsList(sessions);
+  });
 }
 
 async function approveSessionPlan(sessionId, planStatus) {
@@ -1331,19 +1442,17 @@ async function submitEvaluationForm(e) {
 // TAB 4: Events & Teams
 // ============================================================================
 
-async function loadEvents() {
-  eventsList = await apiFetch('/api/events');
-  await refreshUsersAndClubsSelectors();
-
+function renderEventsGrid(list) {
   const grid = document.getElementById('events-grid');
-  if (!eventsList.length) {
+  if (!grid) return;
+  if (!list || !list.length) {
     grid.innerHTML = `<div class="col-span-full glass-card rounded-2xl p-8 text-center text-slate-500 text-sm">No events scheduled yet.</div>`;
     return;
   }
 
-  const canManage = currentUser.role !== 'STUDENT';
+  const canManage = currentUser && currentUser.role !== 'STUDENT';
 
-  grid.innerHTML = eventsList
+  grid.innerHTML = list
     .map((ev) => {
       const teamsHtml = ev.teams.length
         ? ev.teams
@@ -1409,6 +1518,14 @@ async function loadEvents() {
       `;
     })
     .join('');
+}
+
+async function loadEvents() {
+  swrFetch('events_list', '/api/events', {}, (list) => {
+    eventsList = list;
+    renderEventsGrid(eventsList);
+  });
+  refreshUsersAndClubsSelectors();
 }
 
 async function submitCreateEvent(e) {
@@ -2305,6 +2422,58 @@ async function submitBatchCertificates(e) {
 // TAB: Club News & Announcements
 // ============================================================================
 
+function renderClubNewsFeed(items) {
+  const container = document.getElementById('club-news-feed');
+  if (!container) return;
+  if (!items || !items.length) {
+    container.innerHTML = `
+      <div class="col-span-full glass-card rounded-2xl p-8 text-center text-slate-500 text-sm">
+        <p class="font-semibold text-slate-700">No announcements posted yet.</p>
+        <p class="text-xs text-slate-400 mt-1">
+          ${currentUser && currentUser.role === 'STUDENT' ? 'Once your Campus Manager or Club President posts news for your club, it will appear here.' : 'Click "+ Post Club Announcement" to broadcast news to club members.'}
+        </p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = items
+    .map((n) => {
+      const canDelete =
+        ['ADMIN', 'CAMPUS_MGR'].includes(currentUser.role) || n.author_id === currentUser.id;
+      const deleteBtn = canDelete
+        ? `<button onclick="deleteClubNews('${n.id}')" class="text-xs text-rose-500 hover:text-rose-700">Delete</button>`
+        : '';
+
+      const pinBadge = n.pinned
+        ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">PINNED</span>`
+        : '';
+
+      const dateStr = n.created_at ? n.created_at.slice(0, 10) : '';
+
+      return `
+        <div class="glass-card rounded-2xl p-5 flex flex-col justify-between space-y-3 relative ${n.pinned ? 'border-amber-300' : ''}">
+          <div class="space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-bold text-indigo-600 truncate">${n.club_name} (${n.club_code})</span>
+              <div class="flex items-center gap-1.5 shrink-0">
+                ${pinBadge}
+                <span class="text-[11px] text-slate-400">${dateStr}</span>
+              </div>
+            </div>
+            <h3 class="text-sm font-bold text-slate-900 leading-snug">${n.title}</h3>
+            <p class="text-xs text-slate-600 whitespace-pre-line leading-relaxed">${n.content}</p>
+          </div>
+          <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+            <span>Posted by <strong>${n.author_name}</strong></span>
+            ${deleteBtn}
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+}
+
 async function loadClubNews() {
   const container = document.getElementById('club-news-feed');
   const subtitle = document.getElementById('news-tab-subtitle');
@@ -2334,54 +2503,9 @@ async function loadClubNews() {
   }
 
   try {
-    const items = await apiFetch('/api/club-news');
-    if (!items.length) {
-      container.innerHTML = `
-        <div class="col-span-full glass-card rounded-2xl p-8 text-center text-slate-500 text-sm">
-          <p class="font-semibold text-slate-700">No announcements posted yet.</p>
-          <p class="text-xs text-slate-400 mt-1">
-            ${currentUser.role === 'STUDENT' ? 'Once your Campus Manager or Club President posts news for your club, it will appear here.' : 'Click "+ Post Club Announcement" to broadcast news to club members.'}
-          </p>
-        </div>
-      `;
-      return;
-    }
-
-    container.innerHTML = items
-      .map((n) => {
-        const canDelete =
-          ['ADMIN', 'CAMPUS_MGR'].includes(currentUser.role) || n.author_id === currentUser.id;
-        const deleteBtn = canDelete
-          ? `<button onclick="deleteClubNews('${n.id}')" class="text-xs text-rose-500 hover:text-rose-700">Delete</button>`
-          : '';
-
-        const pinBadge = n.pinned
-          ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">PINNED</span>`
-          : '';
-
-        const dateStr = n.created_at ? n.created_at.slice(0, 10) : '';
-
-        return `
-          <div class="glass-card rounded-2xl p-5 flex flex-col justify-between space-y-3 relative ${n.pinned ? 'border-amber-300' : ''}">
-            <div class="space-y-2">
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-xs font-bold text-indigo-600 truncate">${n.club_name} (${n.club_code})</span>
-                <div class="flex items-center gap-1.5 shrink-0">
-                  ${pinBadge}
-                  <span class="text-[11px] text-slate-400">${dateStr}</span>
-                </div>
-              </div>
-              <h3 class="text-sm font-bold text-slate-900 leading-snug">${n.title}</h3>
-              <p class="text-xs text-slate-600 whitespace-pre-line leading-relaxed">${n.content}</p>
-            </div>
-            <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-              <span>Posted by <strong>${n.author_name}</strong></span>
-              ${deleteBtn}
-            </div>
-          </div>
-        `;
-      })
-      .join('');
+    await swrFetch('club_news', '/api/club-news', {}, (items) => {
+      renderClubNewsFeed(items);
+    });
   } catch (err) {
     container.innerHTML = `<div class="col-span-full p-4 rounded-xl bg-rose-50 text-rose-700 text-xs">${err.message}</div>`;
   }
@@ -2431,20 +2555,71 @@ async function deleteClubNews(newsId) {
 // ============================================================================
 
 window.addEventListener('DOMContentLoaded', async () => {
-  if (authToken) {
+  // 1. Instant hydration of campuses from SWR cache (0ms)
+  const cachedCampuses = getSwr('campuses');
+  if (cachedCampuses && cachedCampuses.length) {
+    campusesList = cachedCampuses;
+    populateCampusSelects(campusesList);
+  }
+
+  // 2. Instant hydration of authenticated user from SWR cache (0ms)
+  const cachedUser = getSwr('currentUser');
+  if (authToken && cachedUser) {
+    currentUser = cachedUser;
+    enterApp(); // 0ms transition straight to user dashboard!
+
+    // Silently revalidate user and campuses with single bootstrap query in background
+    try {
+      const boot = await apiFetch('/api/bootstrap');
+      if (boot && boot.user) {
+        currentUser = boot.user;
+        setSwr('currentUser', currentUser);
+        const nameEl = document.getElementById('nav-user-name');
+        const metaEl = document.getElementById('nav-user-meta');
+        const roleEl = document.getElementById('nav-role-badge');
+        if (nameEl) nameEl.textContent = currentUser.full_name;
+        if (metaEl) metaEl.textContent = `${currentUser.email} • ${currentUser.campus_code}`;
+        if (roleEl) roleEl.textContent = currentUser.role;
+      }
+      if (boot && boot.campuses) {
+        campusesList = boot.campuses;
+        setSwr('campuses', campusesList);
+        populateCampusSelects(campusesList);
+      }
+      if (typeof boot.total_pending === 'number') {
+        const badge = document.getElementById('admin-pending-badge');
+        if (badge) {
+          if (boot.total_pending > 0) {
+            badge.textContent = boot.total_pending;
+            badge.classList.remove('hidden');
+          } else {
+            badge.classList.add('hidden');
+          }
+        }
+      }
+    } catch (err) {
+      if (err.message && (err.message.includes('401') || err.message.toLowerCase().includes('token') || err.message.toLowerCase().includes('credential'))) {
+        handleLogout();
+        showHeroScreen();
+      }
+    }
+  } else if (authToken) {
+    // Auth token exists without cached user profile -> single round-trip bootstrap
     document.getElementById('hero-screen')?.classList.add('hidden');
     try {
-      const [_, user] = await Promise.all([
-        loadCampuses(),
-        apiFetch('/api/auth/me'),
-      ]);
-      currentUser = user;
+      const boot = await apiFetch('/api/bootstrap');
+      currentUser = boot.user;
+      setSwr('currentUser', currentUser);
+      campusesList = boot.campuses;
+      setSwr('campuses', campusesList);
+      populateCampusSelects(campusesList);
       await enterApp();
     } catch (_) {
       handleLogout();
       showHeroScreen();
     }
   } else {
+    // Unauthenticated visitor -> instant render hero screen & warm campus selects
     loadCampuses();
     showHeroScreen();
   }

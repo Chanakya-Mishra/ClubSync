@@ -87,20 +87,27 @@ def init_db_and_defaults():
     global _db_initialized
     if _db_initialized:
         return
-    # On SQLite (local development), ensure tables are created; on Supabase PostgreSQL all tables & indexes are permanent
+    # Only run table creation & seeding on local SQLite. Supabase PostgreSQL is permanent and pre-seeded.
+    # This prevents running 100,000 PBKDF2 hash cycles and redundant DB queries on every Vercel cold start!
     if DATABASE_URL.startswith("sqlite"):
         Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
-    try:
-        seed_database(db)
-    finally:
-        db.close()
+        db = SessionLocal()
+        try:
+            seed_database(db)
+        finally:
+            db.close()
     _db_initialized = True
 
 
 @app.on_event("startup")
 def on_startup():
     init_db_and_defaults()
+
+
+@app.get("/api/health")
+def api_health_check():
+    """Ultra-fast, zero-query health check for keeping serverless containers warm."""
+    return {"status": "ok", "time": int(time.time())}
 
 
 # ============================================================================
@@ -747,6 +754,44 @@ def list_campuses(db: Session = Depends(get_db)):
         }
         for c in campuses
     ]
+
+
+@app.get("/api/bootstrap")
+def get_bootstrap_payload(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    High-performance single round-trip bootstrap endpoint.
+    Bundles user profile, campuses, and pending counters in one shot to eliminate network waterfalls.
+    """
+    campuses = db.query(Campus).all()
+    campuses_map = {c.id: c.code for c in campuses}
+    serialized_user = serialize_user(current_user, campuses_map)
+
+    campuses_list = [
+        {
+            "id": c.id,
+            "code": c.code,
+            "name": c.name,
+            "city": c.city,
+            "lat": c.lat,
+            "lng": c.lng,
+            "geofence_radius_m": c.geofence_radius_m,
+        }
+        for c in campuses
+    ]
+
+    total_pending = 0
+    if current_user.role in ("ADMIN", "CAMPUS_MGR", "ADVISOR"):
+        total_pending = db.query(User).filter(User.account_status == "PENDING_APPROVAL").count()
+
+    return {
+        "user": serialized_user,
+        "campuses": campuses_list,
+        "total_pending": total_pending,
+        "timestamp": int(time.time()),
+    }
 
 
 # ============================================================================
