@@ -1206,28 +1206,98 @@ async function toggleCheckinWindow(sessionId, action) {
   }
 }
 
-async function openCheckinModal(sessionId) {
-  document.getElementById('checkin-session-id').value = sessionId;
-  document.getElementById('checkin-otp-input').value = '';
-  openModal('modal-checkin');
-  await refreshLiveQr(sessionId);
-  if (qrIntervalTimer) clearInterval(qrIntervalTimer);
-  qrIntervalTimer = setInterval(() => refreshLiveQr(sessionId), 5000);
+let qrCountdownSeconds = 15;
+let qrTickTimer = null;
+let currentSessionForQr = null;
+
+function updateQrCountdownUi() {
+  const textEl = document.getElementById('qr-countdown-text');
+  const barEl = document.getElementById('qr-progress-bar');
+  if (textEl) textEl.textContent = `${qrCountdownSeconds}s`;
+  if (barEl) {
+    const pct = Math.max(0, Math.min(100, (qrCountdownSeconds / 15) * 100));
+    barEl.style.width = `${pct}%`;
+    if (qrCountdownSeconds <= 3) {
+      barEl.className = 'bg-rose-500 h-1.5 rounded-full transition-all duration-1000 ease-linear';
+    } else {
+      barEl.className = 'bg-indigo-600 h-1.5 rounded-full transition-all duration-1000 ease-linear';
+    }
+  }
 }
 
-function closeCheckinModal() {
-  if (qrIntervalTimer) clearInterval(qrIntervalTimer);
-  closeModal('modal-checkin');
+function tickQrCountdown() {
+  if (!currentSessionForQr) return;
+  qrCountdownSeconds--;
+  if (qrCountdownSeconds <= 0) {
+    qrCountdownSeconds = 15;
+    refreshLiveQr(currentSessionForQr);
+  } else {
+    updateQrCountdownUi();
+  }
 }
 
 async function refreshLiveQr(sessionId) {
   try {
     const data = await apiFetch(`/api/sessions/${sessionId}/qr`);
     currentLiveQrPayload = data;
-    document.getElementById('live-qr-img').src = data.qr_image_base64;
-    document.getElementById('live-otp-code').textContent = data.otp_code;
+    qrCountdownSeconds = data.expires_in_sec || 15;
+    updateQrCountdownUi();
+
+    const imgEl = document.getElementById('live-qr-img');
+    const otpEl = document.getElementById('live-otp-code');
+    const qrSrc = data.qr_image_data_url || data.qr_image_base64 || '';
+    if (imgEl && qrSrc) {
+      imgEl.src = qrSrc;
+    }
+    if (otpEl) {
+      otpEl.textContent = data.otp_code || '------';
+    }
   } catch (err) {
     showToast(err.message, true);
+  }
+}
+
+async function openCheckinModal(sessionId) {
+  currentSessionForQr = sessionId;
+  document.getElementById('checkin-session-id').value = sessionId;
+  document.getElementById('checkin-otp-input').value = '';
+  openModal('modal-checkin');
+
+  await refreshLiveQr(sessionId);
+
+  if (qrTickTimer) clearInterval(qrTickTimer);
+  qrTickTimer = setInterval(tickQrCountdown, 1000);
+}
+
+function closeCheckinModal() {
+  if (qrTickTimer) clearInterval(qrTickTimer);
+  qrTickTimer = null;
+  currentSessionForQr = null;
+  toggleQrFullscreen(false);
+  closeModal('modal-checkin');
+}
+
+function toggleQrFullscreen(forceState = null) {
+  const container = document.getElementById('checkin-modal-container');
+  const imgEl = document.getElementById('live-qr-img');
+  const btn = document.getElementById('btn-qr-projector');
+  if (!container || !imgEl) return;
+
+  const isEnlarged = container.classList.contains('max-w-2xl');
+  const makeEnlarged = forceState !== null ? forceState : !isEnlarged;
+
+  if (makeEnlarged) {
+    container.classList.remove('max-w-md');
+    container.classList.add('max-w-2xl');
+    imgEl.classList.remove('w-52', 'h-52');
+    imgEl.classList.add('w-80', 'h-80');
+    if (btn) btn.textContent = '✕ Standard';
+  } else {
+    container.classList.remove('max-w-2xl');
+    container.classList.add('max-w-md');
+    imgEl.classList.remove('w-80', 'h-80');
+    imgEl.classList.add('w-52', 'h-52');
+    if (btn) btn.textContent = '⛶ Projector';
   }
 }
 

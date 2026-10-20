@@ -56,6 +56,7 @@ def generate_qr_payload(secret: str, session_id: str, timestamp: Optional[float]
         "rotation_interval_sec": ROTATION_INTERVAL_SEC,
         "expires_in_sec": expires_in,
         "qr_image_data_url": _QR_IMAGE_CACHE[cache_key],
+        "qr_image_base64": _QR_IMAGE_CACHE[cache_key],
     }
 
 
