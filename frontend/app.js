@@ -346,6 +346,20 @@ function showAuthSuccess(msg) {
   el.classList.remove('hidden');
 }
 
+function formatCampusLabel(c) {
+  const codeLower = (c.code || '').toLowerCase();
+  if (codeLower.includes('hi-tech') || codeLower.includes('hitech')) {
+    return c.code;
+  }
+  if (codeLower.includes('rathinam')) {
+    return c.code;
+  }
+  if (c.city) {
+    return `${c.code} (${c.city})`;
+  }
+  return c.code;
+}
+
 function populateCampusSelects(list) {
   if (!list || !list.length) return;
   const selects = ['reg-campus', 'club-campus', 'adm-user-campus'];
@@ -353,7 +367,7 @@ function populateCampusSelects(list) {
     const el = document.getElementById(id);
     if (el) {
       el.innerHTML = list
-        .map((c) => `<option value="${c.id}">${c.code} (${c.city})</option>`)
+        .map((c) => `<option value="${c.id}">${formatCampusLabel(c)}</option>`)
         .join('');
     }
   });
@@ -414,7 +428,7 @@ async function handleRegister(e) {
       role: document.getElementById('reg-role').value,
       campus_id: document.getElementById('reg-campus').value,
       roll_number: document.getElementById('reg-roll').value.trim() || null,
-      track: document.getElementById('reg-track').value,
+      track: document.getElementById('reg-track')?.value || 'Mirai Track',
     };
     const data = await apiFetch('/api/auth/register', {
       method: 'POST',
