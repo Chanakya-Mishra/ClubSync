@@ -134,6 +134,265 @@ function showHeroScreen() {
     signInBtn?.classList.remove('hidden');
     signUpBtn?.classList.remove('hidden');
   }
+
+  // Initialize role preview switcher
+  switchHeroRolePreview('student');
+}
+
+// ============================================================================
+// Hero Page Role Preview Interactive Switcher
+// ============================================================================
+
+const HERO_ROLE_DATA = {
+  student: {
+    badge: 'Student Persona',
+    badgeClass: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+    title: 'Student Dashboard',
+    tagline: 'Phone-first hub for Saturday sessions, attendance tracking, and verified transcripts',
+    ctaText: 'Browse Clubs & Join Now →',
+    features: [
+      {
+        icon: '📱',
+        title: '1-Tap Dynamic QR Scan',
+        desc: 'Scan the rotating anti-proxy QR code projected during Saturday Club Days to instantly log check-in.'
+      },
+      {
+        icon: '📊',
+        title: 'Live Attendance Percentage',
+        desc: 'Track personal attendance percentage in real time with threshold indicators across all enrolled clubs.'
+      },
+      {
+        icon: '📜',
+        title: 'Instant Co-Curricular Transcript',
+        desc: 'Export verified co-curricular transcripts showcasing verified attendance, session hours, and project milestones.'
+      },
+      {
+        icon: '🚀',
+        title: 'Campus Event RSVP',
+        desc: 'Direct 1-click registration for flagship campus events like Gambade, Hackathons, and Cross Road.'
+      }
+    ],
+    preview: {
+      status: 'Active Member • 2 Clubs Enrolled',
+      card1Title: 'Robotics & Automation Club',
+      card1Meta: 'Saturday Club Day • 09:30 AM • Labs 4 & 5',
+      card1Badge: '88% Attendance',
+      card2Title: 'AI & Data Science Society',
+      card2Meta: 'Upcoming Deliverable: Autonomous Bot Demo',
+      card2Badge: '92% Attendance'
+    }
+  },
+  coordinator: {
+    badge: 'Student Coordinator',
+    badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    title: 'Student Coordinator Portal',
+    tagline: 'Phone-first operations desk to run Saturday morning check-ins and member workflows',
+    ctaText: 'Open Coordinator Portal →',
+    features: [
+      {
+        icon: '⚡',
+        title: 'Rapid Attendance Desk',
+        desc: 'Monitor live arrival counts as members scan rotating QR codes on Saturday morning.'
+      },
+      {
+        icon: '📋',
+        title: 'Live Member Rosters',
+        desc: 'Access verified member directories, department classifications, and direct contact channels.'
+      },
+      {
+        icon: '🎯',
+        title: 'Deliverable Intake',
+        desc: 'Track Saturday workshop deliverables, artifacts, and team submissions before deadlines.'
+      },
+      {
+        icon: '📣',
+        title: 'Instant Member Broadcasts',
+        desc: 'Push urgent venue changes, session agendas, and equipment notices to club members.'
+      }
+    ],
+    preview: {
+      status: 'Live Saturday Desk Active',
+      card1Title: 'Saturday Morning Check-in Desk',
+      card1Meta: '48 of 54 Members Checked In • Anti-Proxy Verified',
+      card1Badge: 'Live Desk Active',
+      card2Title: 'Session Deliverable Intake',
+      card2Meta: '34 Hands-on Projects Submitted • 0 Pending Overdue',
+      card2Badge: 'On Track'
+    }
+  },
+  president: {
+    badge: 'Club President',
+    badgeClass: 'bg-sky-100 text-sky-800 border-sky-200',
+    title: 'Club President Workspace',
+    tagline: 'End-to-end governance of Saturday session agendas, dynamic QR sessions, and CSV roster exports',
+    ctaText: 'Plan Club Day & Manage →',
+    features: [
+      {
+        icon: '🔑',
+        title: 'Dynamic Rotating QR Generator',
+        desc: 'Generate live 30-minute rotating QR attendance sessions that automatically clean up when done.'
+      },
+      {
+        icon: '📈',
+        title: 'Dedicated Attendance Tab',
+        desc: 'Inspect member-by-member attendance percentage and download official rosters in 1-click CSV.'
+      },
+      {
+        icon: '🗓️',
+        title: 'Saturday Club Day Planning',
+        desc: 'Schedule weekly session topics, venue halls, hands-on tasks, and assign student coordinators.'
+      },
+      {
+        icon: '📢',
+        title: 'Club Announcements',
+        desc: 'Publish priority club announcements and pre-session prerequisites directly to members.'
+      }
+    ],
+    preview: {
+      status: 'Session #8 Scheduled',
+      card1Title: 'Live Rotating QR Attendance Session',
+      card1Meta: 'Auto-expires in 30 mins • Token & OTP Active',
+      card1Badge: 'Active Session',
+      card2Title: 'Dedicated Attendance Directory',
+      card2Meta: '54 Enrolled Members • 86.4% Average Attendance',
+      card2Badge: 'CSV Export Ready'
+    }
+  },
+  advisor: {
+    badge: 'Faculty Advisor',
+    badgeClass: 'bg-amber-100 text-amber-800 border-amber-200',
+    title: 'Faculty Advisor Oversight',
+    tagline: 'Institutional alignment, Saturday agenda review, and official duty leave endorsements',
+    ctaText: 'Staff Login (Faculty Portal) →',
+    features: [
+      {
+        icon: '🛡️',
+        title: 'Saturday Agenda Review',
+        desc: 'Review and endorse weekly session themes and workshop plans before execution.'
+      },
+      {
+        icon: '✍️',
+        title: 'Duty Leave Endorsements',
+        desc: 'Verify authentic student check-in records to endorse official academic duty leave requests.'
+      },
+      {
+        icon: '🏆',
+        title: 'Event Delegations',
+        desc: 'Endorse and select qualified student delegations for Gambade, Hackathons, and summit representations.'
+      },
+      {
+        icon: '📑',
+        title: 'Co-Curricular Certification',
+        desc: 'Audit verified student attendance and contributions prior to transcript certification.'
+      }
+    ],
+    preview: {
+      status: 'Supervising 2 Clubs',
+      card1Title: 'Upcoming Saturday Session Agendas',
+      card1Meta: 'Robotics Club • Session Plan Approved for Saturday',
+      card1Badge: 'Endorsed',
+      card2Title: 'Duty Leave Requests',
+      card2Meta: '4 Validations Pending for Inter-Campus Tech Contingent',
+      card2Badge: '4 Pending'
+    }
+  },
+  admin: {
+    badge: 'Campus Manager & Admin',
+    badgeClass: 'bg-purple-100 text-purple-800 border-purple-200',
+    title: 'Campus Manager & Executive Admin',
+    tagline: 'Multi-campus institutional administration across HI-Tech, Rathinam, RGIB & JUJ',
+    ctaText: 'Campus Manager Portal →',
+    features: [
+      {
+        icon: '🌐',
+        title: '4-Campus Synchronization',
+        desc: 'Real-time multi-campus monitoring across HI-Tech, Rathinam, RGIB, and JUJ club networks.'
+      },
+      {
+        icon: '👥',
+        title: 'Account & Role Approvals',
+        desc: 'Manage and permit user requests for Club Presidents, Faculty Advisors, and Coordinators.'
+      },
+      {
+        icon: '🏛️',
+        title: 'New Club Charters',
+        desc: 'Evaluate, charter, and oversee new student organizations across technical and cultural verticals.'
+      },
+      {
+        icon: '📊',
+        title: 'Institutional Analytics',
+        desc: 'Review campus-wide attendance health, active club counts, and cross-campus event participation.'
+      }
+    ],
+    preview: {
+      status: '4 Campuses Synchronized',
+      card1Title: 'Multi-Campus Sync Radar',
+      card1Meta: 'HI-Tech, Rathinam, RGIB & JUJ Connected • 0 Proxy Flags',
+      card1Badge: '4 Nodes Live',
+      card2Title: 'University-Wide Rollout',
+      card2Meta: '30+ Active Clubs • 1,000+ Enrolled Students Across Campuses',
+      card2Badge: '30+ Clubs Live'
+    }
+  }
+};
+
+function switchHeroRolePreview(roleKey) {
+  const data = HERO_ROLE_DATA[roleKey] || HERO_ROLE_DATA.student;
+  const roleKeys = ['student', 'coordinator', 'president', 'advisor', 'admin'];
+
+  // Update tab buttons
+  roleKeys.forEach((key) => {
+    const btn = document.getElementById(`hero-role-tab-${key}`);
+    if (btn) {
+      if (key === roleKey) {
+        btn.className = 'px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-md transition-all duration-200 flex items-center gap-1.5 shrink-0';
+      } else {
+        btn.className = 'px-4 py-2 rounded-xl bg-white/80 hover:bg-white text-slate-700 font-semibold text-xs border border-slate-200/90 shadow-sm transition-all duration-200 flex items-center gap-1.5 shrink-0';
+      }
+    }
+  });
+
+  // Update Preview Card contents
+  const badgeEl = document.getElementById('hero-role-badge');
+  const titleEl = document.getElementById('hero-role-title');
+  const taglineEl = document.getElementById('hero-role-tagline');
+  const ctaBtn = document.getElementById('hero-role-cta');
+  const featuresEl = document.getElementById('hero-role-features');
+  const previewStatusEl = document.getElementById('hero-role-preview-status');
+  const p1Title = document.getElementById('hero-role-p1-title');
+  const p1Meta = document.getElementById('hero-role-p1-meta');
+  const p1Badge = document.getElementById('hero-role-p1-badge');
+  const p2Title = document.getElementById('hero-role-p2-title');
+  const p2Meta = document.getElementById('hero-role-p2-meta');
+  const p2Badge = document.getElementById('hero-role-p2-badge');
+
+  if (badgeEl) {
+    badgeEl.textContent = data.badge;
+    badgeEl.className = `inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${data.badgeClass}`;
+  }
+  if (titleEl) titleEl.textContent = data.title;
+  if (taglineEl) taglineEl.textContent = data.tagline;
+  if (ctaBtn) ctaBtn.textContent = data.ctaText;
+
+  if (featuresEl) {
+    featuresEl.innerHTML = data.features.map(f => `
+      <div class="glass-subcard p-3 rounded-xl space-y-1">
+        <div class="flex items-center gap-2">
+          <span class="text-base">${f.icon}</span>
+          <span class="font-bold text-xs text-slate-900">${f.title}</span>
+        </div>
+        <p class="text-[11px] text-slate-600 leading-relaxed">${f.desc}</p>
+      </div>
+    `).join('');
+  }
+
+  if (previewStatusEl) previewStatusEl.textContent = data.preview.status;
+  if (p1Title) p1Title.textContent = data.preview.card1Title;
+  if (p1Meta) p1Meta.textContent = data.preview.card1Meta;
+  if (p1Badge) p1Badge.textContent = data.preview.card1Badge;
+  if (p2Title) p2Title.textContent = data.preview.card2Title;
+  if (p2Meta) p2Meta.textContent = data.preview.card2Meta;
+  if (p2Badge) p2Badge.textContent = data.preview.card2Badge;
 }
 
 function openAuthScreen(mode = 'login') {
