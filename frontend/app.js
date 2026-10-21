@@ -748,7 +748,6 @@ function renderDashboardOverview(data) {
         <div class="glass-subcard rounded-xl p-4 space-y-2">
           <div class="flex items-center justify-between">
             <span class="font-bold text-sm text-slate-900">${c.campus_code}</span>
-            <span class="text-xs font-semibold text-blue-600">${c.participation_rate_pct}% Active</span>
           </div>
           <div class="grid grid-cols-2 gap-2 text-xs text-slate-600 pt-1">
             <div>Clubs: <strong class="text-slate-900">${c.active_clubs}/${c.total_clubs}</strong></div>

@@ -286,7 +286,20 @@
               </div>
               <svg viewBox="0 0 400 185" class="w-full h-36">
                 <defs>
-                  <linearGradient id="syncGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <!-- 3 User-Space Gradients (Prevents SVG 0-width bounding-box clipping on vertical JUJ stream) -->
+                  <linearGradient id="syncGradHitech" gradientUnits="userSpaceOnUse" x1="70" y1="50" x2="200" y2="95">
+                    <stop offset="0%" stop-color="#38bdf8" />
+                    <stop offset="100%" stop-color="#818cf8" />
+                  </linearGradient>
+                  <linearGradient id="syncGradRathinam" gradientUnits="userSpaceOnUse" x1="330" y1="50" x2="200" y2="95">
+                    <stop offset="0%" stop-color="#818cf8" />
+                    <stop offset="100%" stop-color="#c084fc" />
+                  </linearGradient>
+                  <linearGradient id="syncGradJuj" gradientUnits="userSpaceOnUse" x1="200" y1="155" x2="200" y2="95">
+                    <stop offset="0%" stop-color="#e879f9" />
+                    <stop offset="100%" stop-color="#818cf8" />
+                  </linearGradient>
+                  <linearGradient id="syncCoreGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stop-color="#38bdf8" />
                     <stop offset="50%" stop-color="#818cf8" />
                     <stop offset="100%" stop-color="#e879f9" />
@@ -311,9 +324,31 @@
                 </g>
 
                 <!-- Animated Data Streams from 3 Campuses to ClubSync Core -->
-                <line x1="70" y1="50" x2="200" y2="95" stroke="url(#syncGrad)" stroke-width="2" class="animate-dash" />
-                <line x1="330" y1="50" x2="200" y2="95" stroke="url(#syncGrad)" stroke-width="2" class="animate-dash" />
-                <line x1="200" y1="155" x2="200" y2="95" stroke="url(#syncGrad)" stroke-width="2" class="animate-dash" />
+                <line x1="70" y1="50" x2="200" y2="95" stroke="url(#syncGradHitech)" stroke-width="2" class="animate-dash" stroke-dasharray="6 6" />
+                <line x1="330" y1="50" x2="200" y2="95" stroke="url(#syncGradRathinam)" stroke-width="2" class="animate-dash" stroke-dasharray="6 6" />
+                <line x1="200" y1="155" x2="200" y2="95" stroke="url(#syncGradJuj)" stroke-width="2" class="animate-dash" stroke-dasharray="6 6" />
+
+                <!-- Real-Time Data Packets Traveling from each Campus to Core -->
+                <!-- 1. HI-Tech Data Packet -->
+                <circle r="4" fill="#38bdf8">
+                  <animate attributeName="cx" values="70; 200" dur="2.2s" repeatCount="indefinite" />
+                  <animate attributeName="cy" values="50; 95" dur="2.2s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0; 1; 1; 0" dur="2.2s" repeatCount="indefinite" keyTimes="0; 0.15; 0.85; 1" />
+                </circle>
+
+                <!-- 2. Rathinam Data Packet -->
+                <circle r="4" fill="#818cf8">
+                  <animate attributeName="cx" values="330; 200" dur="2.2s" repeatCount="indefinite" begin="0.73s" />
+                  <animate attributeName="cy" values="50; 95" dur="2.2s" repeatCount="indefinite" begin="0.73s" />
+                  <animate attributeName="opacity" values="0; 1; 1; 0" dur="2.2s" repeatCount="indefinite" begin="0.73s" keyTimes="0; 0.15; 0.85; 1" />
+                </circle>
+
+                <!-- 3. JUJ Data Packet -->
+                <circle r="4" fill="#e879f9">
+                  <animate attributeName="cx" values="200; 200" dur="2.2s" repeatCount="indefinite" begin="1.46s" />
+                  <animate attributeName="cy" values="155; 95" dur="2.2s" repeatCount="indefinite" begin="1.46s" />
+                  <animate attributeName="opacity" values="0; 1; 1; 0" dur="2.2s" repeatCount="indefinite" begin="1.46s" keyTimes="0; 0.15; 0.85; 1" />
+                </circle>
 
                 <!-- 3 Official Campus Nodes: HI-Tech, Rathinam, JUJ -->
                 <g>
@@ -331,7 +366,7 @@
 
                 <!-- Central ClubSync Hub -->
                 <circle cx="200" cy="95" r="24" fill="rgba(99, 102, 241, 0.35)" class="animate-pulse-ring" />
-                <circle cx="200" cy="95" r="22" fill="url(#syncGrad)" />
+                <circle cx="200" cy="95" r="22" fill="url(#syncCoreGrad)" />
                 <text x="200" y="93" text-anchor="middle" fill="#ffffff" font-size="8.5" font-weight="800">CLUB</text>
                 <text x="200" y="103" text-anchor="middle" fill="#ffffff" font-size="8.5" font-weight="800">SYNC</text>
               </svg>
