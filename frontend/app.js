@@ -300,13 +300,13 @@ const HERO_ROLE_DATA = {
     badge: 'Campus Manager & Admin',
     badgeClass: 'bg-purple-100 text-purple-800 border-purple-200',
     title: 'Campus Manager & Executive Admin',
-    tagline: 'Multi-campus institutional administration across HI-Tech, Rathinam, RGIB & JUJ',
+    tagline: 'Multi-campus institutional administration across HI-Tech, Rathinam & JUJ',
     ctaText: 'Campus Manager Portal →',
     features: [
       {
         icon: '🌐',
-        title: '4-Campus Synchronization',
-        desc: 'Real-time multi-campus monitoring across HI-Tech, Rathinam, RGIB, and JUJ club networks.'
+        title: '3-Campus Synchronization',
+        desc: 'Real-time multi-campus monitoring across HI-Tech, Rathinam, and JUJ club networks.'
       },
       {
         icon: '👥',
@@ -325,10 +325,10 @@ const HERO_ROLE_DATA = {
       }
     ],
     preview: {
-      status: '4 Campuses Synchronized',
+      status: '3 Campuses Synchronized',
       card1Title: 'Multi-Campus Sync Radar',
-      card1Meta: 'HI-Tech, Rathinam, RGIB & JUJ Connected • 0 Proxy Flags',
-      card1Badge: '4 Nodes Live',
+      card1Meta: 'HI-Tech, Rathinam & JUJ Connected • 0 Proxy Flags',
+      card1Badge: '3 Nodes Live',
       card2Title: 'University-Wide Rollout',
       card2Meta: '30+ Active Clubs • 1,000+ Enrolled Students Across Campuses',
       card2Badge: '30+ Clubs Live'

@@ -15,7 +15,7 @@ PYTHONPATH=. ./.venv/bin/pytest tests/test_problem3_requirements.py -v
 
 | # | Test Area (Section 6 Brief) | Minimum Evidence Required | Automated Test Case | Result & Verified Evidence |
 | :--- | :--- | :--- | :--- | :--- |
-| **1** | **End-to-end Club Day** | Full flow for 3 clubs: `plan -> approve -> check-in -> submit -> evaluate -> report` | `test_1_end_to_end_club_day_flow_for_3_clubs` | **PASSED** — Executed complete 7-step lifecycle across 3 clubs (`Mirai AI Club @ HI-Tech`, `AutonomeX Robotics @ Ratnam`, `PitchCraft Debate @ RGIB`). Verified advisor approval, QR check-in, presenter tagging, deliverable upload, rubric grading (`28.5/30`), and monthly report reflection. |
+| **1** | **End-to-end Club Day** | Full flow for 3 clubs: `plan -> approve -> check-in -> submit -> evaluate -> report` | `test_1_end_to_end_club_day_flow_for_3_clubs` | **PASSED** — Executed complete 7-step lifecycle across 3 clubs (`Mirai AI Club @ HI-Tech`, `AutonomeX Robotics @ Rathinam`, `PitchCraft Debate @ JUJ`). Verified advisor approval, QR check-in, presenter tagging, deliverable upload, rubric grading (`28.5/30`), and monthly report reflection. |
 | **2** | **Check-in Integrity** | Screenshot sharing, late check-in, and check-in from outside campus (geo-check): what happens in each case | `test_2_checkin_integrity_screenshot_late_and_geofence` | **PASSED** — <br>1. **Screenshot Sharing (60s old QR):** Rejected with `403 EXPIRED_QR_SCREENSHOT` and logged in `audit_logs`.<br>2. **Outside Campus GPS (4.5km away):** Rejected with `403 OUTSIDE_CAMPUS_GEOFENCE` (>500m radius).<br>3. **Late Check-in (+25m after start):** Accepted & automatically flagged `status = "LATE"`. |
 | **3** | **Certificates** | 20 certificates generated; each verification link opens the correct record; tampered PDF fails verification | `test_3_twenty_certificates_and_tampered_pdf_detection` | **PASSED** — 23 PDFs (22 Certificates + 1 Official Transcript) generated in `data/certificates/`. Verified all 20 `/api/verify/{serial}` links return exact student/hash records. Uploaded genuine PDF (`AUTHENTIC_UNTAMPERED_PDF`) and byte-modified PDF (`TAMPERED_PDF_DETECTED` — failed verification as required). |
 | **4** | **Events** | Event with 200 registrations and team formation runs without duplicates or lost entries | `test_4_event_with_200_registrations_and_team_formation` | **PASSED** — Registered 200 students into Gambade event across 50 teams of 4 (50 team creations + 150 team joins via invite code). Verified `total_registrations == 200`, `50 teams`, `0 lost entries`, and verified duplicate registration attempt is blocked (`400 Bad Request`). |
@@ -28,7 +28,7 @@ PYTHONPATH=. ./.venv/bin/pytest tests/test_problem3_requirements.py -v
 ## 2. Scalability & High-Concurrency Load Test Results (Section 7)
 
 ### Dataset Scale Provisioned
-* **Campuses:** `4` (`HI-Tech`, `Ratnam`, `RGIB`, `JUJ`)
+* **Campuses:** `3` (`HI-Tech`, `Rathinam`, `JUJ`)
 * **Clubs:** `32` Active Clubs (`> 30` requirement)
 * **Students:** `1,298` Students (`> 1,000` requirement)
 
