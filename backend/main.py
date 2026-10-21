@@ -9,8 +9,9 @@ import secrets
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 
-from fastapi import FastAPI, Depends, HTTPException, Header, UploadFile, File, Form, Query, Body
+from fastapi import FastAPI, Depends, HTTPException, Header, UploadFile, File, Form, Query, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, StreamingResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -78,6 +79,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
+
+@app.middleware("http")
+async def add_performance_and_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/static/") or path in ("/logo.png", "/favicon.ico"):
+        if path.endswith((".png", ".jpg", ".jpeg", ".svg", ".ico", ".woff2", ".ttf")):
+            response.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=604800"
+        elif path.endswith((".js", ".css")):
+            response.headers["Cache-Control"] = "public, max-age=300, stale-while-revalidate=86400"
+    elif path == "/" or path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 _db_initialized = False
@@ -2475,6 +2491,7 @@ def get_monthly_club_reports(
     club_id: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
+    from sqlalchemy import func
     q = db.query(Club)
     if campus_id:
         q = q.filter(Club.campus_id == campus_id)
@@ -2483,32 +2500,62 @@ def get_monthly_club_reports(
     clubs = q.all()
     campuses_map = {c.id: c.code for c in db.query(Campus).all()}
 
-    reports = []
-    for cl in clubs:
-        approved_members = (
-            db.query(ClubMembership)
-            .filter(ClubMembership.club_id == cl.id, ClubMembership.status == "APPROVED")
-            .count()
-        )
-        sessions = db.query(ClubDaySession).filter(ClubDaySession.club_id == cl.id).all()
-        completed_sessions = [s for s in sessions if s.checkin_status in ("OPEN", "COMPLETED")]
-        session_ids = [s.id for s in completed_sessions]
+    club_ids = [cl.id for cl in clubs]
+    if not club_ids:
+        return {"generated_at": datetime.utcnow().isoformat(), "club_reports": []}
 
-        raw_attendances = (
+    # 1. Batch approved membership counts in 1 query
+    approved_mems_by_club = dict(
+        db.query(ClubMembership.club_id, func.count(ClubMembership.id))
+        .filter(ClubMembership.club_id.in_(club_ids), ClubMembership.status == "APPROVED")
+        .group_by(ClubMembership.club_id)
+        .all()
+    )
+
+    # 2. Batch all sessions for these clubs in 1 query
+    sessions = (
+        db.query(ClubDaySession)
+        .filter(ClubDaySession.club_id.in_(club_ids))
+        .all()
+    )
+    sessions_by_club: Dict[str, list] = {}
+    completed_session_ids = []
+    for s in sessions:
+        if s.checkin_status in ("OPEN", "COMPLETED"):
+            sessions_by_club.setdefault(s.club_id, []).append(s)
+            completed_session_ids.append(s.id)
+
+    # 3. Batch attendances & submissions in single queries
+    attendances_by_session: Dict[str, list] = {}
+    if completed_session_ids:
+        raw_atts = (
             db.query(Attendance)
             .filter(
-                Attendance.session_id.in_(session_ids),
+                Attendance.session_id.in_(completed_session_ids),
                 Attendance.status.in_(["PRESENT", "LATE"]),
             )
             .all()
-            if session_ids
-            else []
         )
-        raw_submissions = (
-            db.query(Submission).filter(Submission.session_id.in_(session_ids)).all()
-            if session_ids
-            else []
-        )
+        for a in raw_atts:
+            attendances_by_session.setdefault(a.session_id, []).append(a)
+
+    submissions_by_session: Dict[str, list] = {}
+    if completed_session_ids:
+        raw_subs = db.query(Submission).filter(Submission.session_id.in_(completed_session_ids)).all()
+        for sub in raw_subs:
+            submissions_by_session.setdefault(sub.session_id, []).append(sub)
+
+    reports = []
+    for cl in clubs:
+        approved_members = approved_mems_by_club.get(cl.id, 0)
+        completed_sessions = sessions_by_club.get(cl.id, [])
+        session_ids = [s.id for s in completed_sessions]
+
+        raw_attendances = []
+        raw_submissions = []
+        for sid in session_ids:
+            raw_attendances.extend(attendances_by_session.get(sid, []))
+            raw_submissions.extend(submissions_by_session.get(sid, []))
 
         expected_total_checkins = approved_members * len(completed_sessions)
         attendance_pct = (
@@ -2793,8 +2840,51 @@ def get_dashboard_analytics(
 
 @app.get("/api/reports/export-csv")
 def export_academic_review_csv(db: Session = Depends(get_db)):
+    from sqlalchemy import func
     students = db.query(User).filter(User.role == "STUDENT").all()
     campuses_map = {c.id: c.code for c in db.query(Campus).all()}
+
+    student_ids = [st.id for st in students]
+    if not student_ids:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["No student records found"])
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=msot_cocurricular_report.csv"},
+        )
+
+    # 1. Batch counts in single queries
+    mem_counts = dict(
+        db.query(ClubMembership.student_id, func.count(ClubMembership.id))
+        .filter(ClubMembership.student_id.in_(student_ids), ClubMembership.status == "APPROVED")
+        .group_by(ClubMembership.student_id)
+        .all()
+    )
+    ev_counts = dict(
+        db.query(EventRegistration.student_id, func.count(EventRegistration.id))
+        .filter(EventRegistration.student_id.in_(student_ids))
+        .group_by(EventRegistration.student_id)
+        .all()
+    )
+    cert_counts = dict(
+        db.query(Certificate.student_id, func.count(Certificate.id))
+        .filter(Certificate.student_id.in_(student_ids))
+        .group_by(Certificate.student_id)
+        .all()
+    )
+
+    # 2. Batch fetch attendances
+    atts_by_student: Dict[str, list] = {}
+    for a in db.query(Attendance).filter(Attendance.student_id.in_(student_ids), Attendance.status.in_(["PRESENT", "LATE"])).all():
+        atts_by_student.setdefault(a.student_id, []).append(a)
+
+    # 3. Batch fetch submissions
+    subs_by_student: Dict[str, list] = {}
+    for s in db.query(Submission).filter(Submission.student_id.in_(student_ids)).all():
+        subs_by_student.setdefault(s.student_id, []).append(s)
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -2815,22 +2905,14 @@ def export_academic_review_csv(db: Session = Depends(get_db)):
     )
 
     for st in students:
-        mems = (
-            db.query(ClubMembership)
-            .filter(ClubMembership.student_id == st.id, ClubMembership.status == "APPROVED")
-            .count()
-        )
-        atts = (
-            db.query(Attendance)
-            .filter(Attendance.student_id == st.id, Attendance.status.in_(["PRESENT", "LATE"]))
-            .all()
-        )
+        mems = mem_counts.get(st.id, 0)
+        atts = atts_by_student.get(st.id, [])
         pres = sum(1 for a in atts if a.is_presenter)
-        subs = db.query(Submission).filter(Submission.student_id == st.id).all()
+        subs = subs_by_student.get(st.id, [])
         scores = [s.evaluation.total_score for s in subs if s.evaluation]
         avg_sc = round(sum(scores) / len(scores), 2) if scores else 0.0
-        evs = db.query(EventRegistration).filter(EventRegistration.student_id == st.id).count()
-        certs = db.query(Certificate).filter(Certificate.student_id == st.id).count()
+        evs = ev_counts.get(st.id, 0)
+        certs = cert_counts.get(st.id, 0)
 
         writer.writerow(
             [
