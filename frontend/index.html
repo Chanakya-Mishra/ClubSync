@@ -675,7 +675,15 @@
               Forgot password?
             </button>
           </div>
-          <input id="login-password" type="password" required autocomplete="current-password" placeholder="••••••••" class="w-full rounded-xl glass-input px-3.5 py-2.5 text-sm" />
+          <div class="relative">
+            <input id="login-password" type="password" required autocomplete="current-password" placeholder="••••••••" class="w-full rounded-xl glass-input px-3.5 py-2.5 pr-10 text-sm" />
+            <button type="button" onclick="togglePasswordVisibility('login-password', 'login-password-eye')" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-indigo-600 transition-colors focus:outline-none" title="Show or hide password">
+              <svg id="login-password-eye" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+          </div>
         </div>
         <button type="submit" class="w-full py-2.5 rounded-xl btn-gradient font-semibold text-sm">
           Sign In to ClubSync
@@ -711,11 +719,27 @@
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">New Password</label>
-            <input id="forgot-new-password" type="password" minlength="4" placeholder="Minimum 4 characters" class="w-full rounded-xl glass-input px-3.5 py-2.5 text-sm" />
+            <div class="relative">
+              <input id="forgot-new-password" type="password" minlength="4" placeholder="Minimum 4 characters" class="w-full rounded-xl glass-input px-3.5 py-2.5 pr-10 text-sm" />
+              <button type="button" onclick="togglePasswordVisibility('forgot-new-password', 'forgot-new-eye')" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-indigo-600 transition-colors focus:outline-none" title="Show or hide password">
+                <svg id="forgot-new-eye" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </button>
+            </div>
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Confirm New Password</label>
-            <input id="forgot-confirm-password" type="password" minlength="4" placeholder="Re-type new password" class="w-full rounded-xl glass-input px-3.5 py-2.5 text-sm" />
+            <div class="relative">
+              <input id="forgot-confirm-password" type="password" minlength="4" placeholder="Re-type new password" class="w-full rounded-xl glass-input px-3.5 py-2.5 pr-10 text-sm" />
+              <button type="button" onclick="togglePasswordVisibility('forgot-confirm-password', 'forgot-confirm-eye')" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-indigo-600 transition-colors focus:outline-none" title="Show or hide password">
+                <svg id="forgot-confirm-eye" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </button>
+            </div>
           </div>
           <button type="button" id="forgot-reset-btn" onclick="handleCompleteReset()" class="w-full py-2.5 rounded-xl btn-gradient font-semibold text-sm">
             Reset Password & Sign In
@@ -744,7 +768,15 @@
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Password</label>
-          <input id="reg-password" type="password" required minlength="4" placeholder="Minimum 4 characters" class="w-full rounded-xl glass-input px-3 py-2 text-sm" />
+          <div class="relative">
+            <input id="reg-password" type="password" required minlength="4" placeholder="Minimum 4 characters" class="w-full rounded-xl glass-input px-3 py-2 pr-10 text-sm" />
+            <button type="button" onclick="togglePasswordVisibility('reg-password', 'reg-password-eye')" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-indigo-600 transition-colors focus:outline-none" title="Show or hide password">
+              <svg id="reg-password-eye" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+          </div>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>

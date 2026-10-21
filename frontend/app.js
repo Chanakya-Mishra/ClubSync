@@ -1,4 +1,4 @@
-let authToken = sessionStorage.getItem('clubsync_token') || localStorage.getItem('clubsync_token') || '';
+let authToken = '';
 let currentUser = null;
 let campusesList = [];
 let allUsersList = [];
@@ -7,6 +7,14 @@ let eventsList = [];
 let activeSessionIdForDetail = null;
 let qrIntervalTimer = null;
 let currentLiveQrPayload = null;
+
+// Purge any persistent tokens so page reloads/tab close always start signed out on hero page
+try {
+  sessionStorage.removeItem('clubsync_token');
+  localStorage.removeItem('clubsync_token');
+  localStorage.removeItem('clubsync_swr_currentUser');
+  sessionStorage.removeItem('clubsync_swr_currentUser');
+} catch (_) {}
 
 // ============================================================================
 // SWR (Stale-While-Revalidate) Instant Cache Engine
@@ -395,12 +403,59 @@ function switchHeroRolePreview(roleKey) {
   if (p2Badge) p2Badge.textContent = data.preview.card2Badge;
 }
 
+// ============================================================================
+// Show / Hide Password Helper
+// ============================================================================
+
+function togglePasswordVisibility(inputId, eyeIconId) {
+  const input = document.getElementById(inputId);
+  const icon = document.getElementById(eyeIconId);
+  if (!input) return;
+
+  if (input.type === 'password') {
+    input.type = 'text';
+    if (icon) {
+      icon.innerHTML = `
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+      `;
+    }
+  } else {
+    input.type = 'password';
+    if (icon) {
+      icon.innerHTML = `
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+      `;
+    }
+  }
+}
+
+function resetPasswordVisibility() {
+  const fields = [
+    { input: 'login-password', icon: 'login-password-eye' },
+    { input: 'reg-password', icon: 'reg-password-eye' },
+    { input: 'forgot-new-password', icon: 'forgot-new-eye' },
+    { input: 'forgot-confirm-password', icon: 'forgot-confirm-eye' },
+  ];
+  const eyeSvgPath = `
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+  `;
+  fields.forEach(({ input, icon }) => {
+    const el = document.getElementById(input);
+    if (el) el.type = 'password';
+    const iconEl = document.getElementById(icon);
+    if (iconEl) iconEl.innerHTML = eyeSvgPath;
+  });
+}
+
 function openAuthScreen(mode = 'login') {
   document.getElementById('hero-screen').classList.add('hidden');
   document.getElementById('app-screen').classList.add('hidden');
   document.getElementById('auth-screen').classList.remove('hidden');
   const passInput = document.getElementById('login-password');
   if (passInput) passInput.value = '';
+  resetPasswordVisibility();
   switchAuthMode(mode);
 }
 
@@ -445,6 +500,7 @@ async function verifyFromHero() {
 }
 
 function switchAuthMode(mode) {
+  resetPasswordVisibility();
   const loginForm = document.getElementById('login-form');
   const regForm = document.getElementById('register-form');
   const forgotForm = document.getElementById('forgot-form');
@@ -663,13 +719,11 @@ async function handleLogin(e) {
       body: JSON.stringify({ email, password }),
     });
     authToken = data.token;
-    sessionStorage.setItem('clubsync_token', authToken);
-    localStorage.setItem('clubsync_token', authToken);
     currentUser = data.user;
-    setSwr('currentUser', currentUser);
     // Clear password input immediately after successful authentication
     const passInput = document.getElementById('login-password');
     if (passInput) passInput.value = '';
+    resetPasswordVisibility();
     await enterApp();
   } catch (err) {
     showAuthError(err.message);
@@ -702,10 +756,8 @@ async function handleRegister(e) {
     }
 
     authToken = data.token;
-    sessionStorage.setItem('clubsync_token', authToken);
-    localStorage.setItem('clubsync_token', authToken);
     currentUser = data.user;
-    setSwr('currentUser', currentUser);
+    resetPasswordVisibility();
     await enterApp();
   } catch (err) {
     showAuthError(err.message);
@@ -715,15 +767,18 @@ async function handleRegister(e) {
 function handleLogout() {
   authToken = '';
   currentUser = null;
-  sessionStorage.removeItem('clubsync_token');
-  localStorage.removeItem('clubsync_token');
-  clearSwr();
+  try {
+    sessionStorage.removeItem('clubsync_token');
+    localStorage.removeItem('clubsync_token');
+    clearSwr('currentUser');
+  } catch (_) {}
 
   // Clear all login input fields so browser does not retain or auto-submit
   const emailInput = document.getElementById('login-email');
   const passInput = document.getElementById('login-password');
   if (emailInput) emailInput.value = '';
   if (passInput) passInput.value = '';
+  resetPasswordVisibility();
 
   showHeroScreen();
   showToast('Signed out successfully.');
@@ -3262,76 +3317,41 @@ function exportPresidentAttendanceCsv() {
 }
 
 // ============================================================================
-// Initialize Application on Page Load
+// Initialize Application on Page Load (Always start on Hero & auto sign-out on close/reload)
 // ============================================================================
 
+window.addEventListener('beforeunload', () => {
+  authToken = '';
+  currentUser = null;
+  try {
+    sessionStorage.removeItem('clubsync_token');
+    localStorage.removeItem('clubsync_token');
+    localStorage.removeItem('clubsync_swr_currentUser');
+    sessionStorage.removeItem('clubsync_swr_currentUser');
+  } catch (_) {}
+});
+
 window.addEventListener('DOMContentLoaded', async () => {
-  // 1. Instant hydration of campuses from SWR cache (0ms)
+  // Always start fresh on the Hero page - automatically signed out on page load / tab close / reload
+  authToken = '';
+  currentUser = null;
+  try {
+    sessionStorage.removeItem('clubsync_token');
+    localStorage.removeItem('clubsync_token');
+    localStorage.removeItem('clubsync_swr_currentUser');
+    sessionStorage.removeItem('clubsync_swr_currentUser');
+  } catch (_) {}
+
+  // 1. Instant hydration of public campuses from SWR cache (0ms for registration modal)
   const cachedCampuses = getSwr('campuses');
   if (cachedCampuses && cachedCampuses.length) {
     campusesList = cachedCampuses;
     populateCampusSelects(campusesList);
   }
 
-  // 2. Instant hydration of authenticated user from SWR cache (0ms)
-  const cachedUser = getSwr('currentUser');
-  if (authToken && cachedUser) {
-    currentUser = cachedUser;
-    enterApp(); // 0ms transition straight to user dashboard!
+  // 2. Fetch fresh campuses list in background for registration selects
+  loadCampuses();
 
-    // Silently revalidate user and campuses with single bootstrap query in background
-    try {
-      const boot = await apiFetch('/api/bootstrap');
-      if (boot && boot.user) {
-        currentUser = boot.user;
-        setSwr('currentUser', currentUser);
-        const nameEl = document.getElementById('nav-user-name');
-        const metaEl = document.getElementById('nav-user-meta');
-        const roleEl = document.getElementById('nav-role-badge');
-        if (nameEl) nameEl.textContent = currentUser.full_name;
-        if (metaEl) metaEl.textContent = `${currentUser.email} • ${currentUser.campus_code}`;
-        if (roleEl) roleEl.textContent = currentUser.role;
-      }
-      if (boot && boot.campuses) {
-        campusesList = boot.campuses;
-        setSwr('campuses', campusesList);
-        populateCampusSelects(campusesList);
-      }
-      if (typeof boot.total_pending === 'number') {
-        const badge = document.getElementById('admin-pending-badge');
-        if (badge) {
-          if (boot.total_pending > 0) {
-            badge.textContent = boot.total_pending;
-            badge.classList.remove('hidden');
-          } else {
-            badge.classList.add('hidden');
-          }
-        }
-      }
-    } catch (err) {
-      if (err.message && (err.message.includes('401') || err.message.toLowerCase().includes('token') || err.message.toLowerCase().includes('credential'))) {
-        handleLogout();
-        showHeroScreen();
-      }
-    }
-  } else if (authToken) {
-    // Auth token exists without cached user profile -> single round-trip bootstrap
-    document.getElementById('hero-screen')?.classList.add('hidden');
-    try {
-      const boot = await apiFetch('/api/bootstrap');
-      currentUser = boot.user;
-      setSwr('currentUser', currentUser);
-      campusesList = boot.campuses;
-      setSwr('campuses', campusesList);
-      populateCampusSelects(campusesList);
-      await enterApp();
-    } catch (_) {
-      handleLogout();
-      showHeroScreen();
-    }
-  } else {
-    // Unauthenticated visitor -> instant render hero screen & warm campus selects
-    loadCampuses();
-    showHeroScreen();
-  }
+  // 3. Always show the hero screen initially on reload/reopen
+  showHeroScreen();
 });
