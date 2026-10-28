@@ -22,13 +22,36 @@ else:
 os.makedirs(DATA_DIR, exist_ok=True)
 
 # Supabase Configuration
-SUPABASE_URL = os.environ.get("SUPABASE_URL", os.environ.get("NEXT_PUBLIC_clubsync_SUPABASE_URL", "")).strip()
-SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", os.environ.get("clubsync_SUPABASE_ANON_KEY", "")).strip()
-SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", os.environ.get("clubsync_SUPABASE_SERVICE_ROLE_KEY", "")).strip()
+_env_supabase_url = os.environ.get("SUPABASE_URL", "").strip()
+if not _env_supabase_url or "rpskgbyrpfyszpyfwebp" in _env_supabase_url:
+    _alt_url = os.environ.get("NEXT_PUBLIC_clubsync_SUPABASE_URL", "").strip()
+    if _alt_url and "rpskgbyrpfyszpyfwebp" not in _alt_url:
+        SUPABASE_URL = _alt_url
+    else:
+        SUPABASE_URL = "https://jmesfffyyzlhyjtdbipa.supabase.co"
+else:
+    SUPABASE_URL = _env_supabase_url
+
+_env_anon_key = os.environ.get("SUPABASE_ANON_KEY", "").strip()
+if not _env_anon_key:
+    _alt_anon = os.environ.get("clubsync_SUPABASE_ANON_KEY", "").strip()
+    SUPABASE_ANON_KEY = _alt_anon if "rpskgbyrpfyszpyfwebp" not in _alt_anon else ""
+else:
+    SUPABASE_ANON_KEY = _env_anon_key
+
+_env_service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+if not _env_service_key:
+    _alt_service = os.environ.get("clubsync_SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    SUPABASE_SERVICE_ROLE_KEY = _alt_service if "rpskgbyrpfyszpyfwebp" not in _alt_service else ""
+else:
+    SUPABASE_SERVICE_ROLE_KEY = _env_service_key
+
 SUPABASE_STORAGE_BUCKET = os.environ.get("SUPABASE_STORAGE_BUCKET", "club-tracker-assets").strip()
 
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
+# Cloud Supabase Database Pooler URL (Configured for project jmesfffyyzlhyjtdbipa in region ap-south-1)
+SUPABASE_CLOUD_DB_URL = "postgresql://postgres.jmesfffyyzlhyjtdbipa:cognix%40902008@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require"
 DEFAULT_SQLITE_URL = f"sqlite:///{os.path.join(DATA_DIR, 'msot_club_tracker.db')}"
 
 
@@ -44,9 +67,18 @@ def _get_valid_env_db_url() -> str:
         "clubsync_POSTGRES_URL_NON_POOLING",
     ):
         val = os.environ.get(key, "").strip()
-        if val and "[PASSWORD]" not in val and "[PROJECT-REF]" not in val and "YOUR_PASSWORD" not in val:
+        if (
+            val
+            and "[PASSWORD]" not in val
+            and "[PROJECT-REF]" not in val
+            and "YOUR_PASSWORD" not in val
+            and "rpskgbyrpfyszpyfwebp" not in val
+        ):
             return val
-    return DEFAULT_SQLITE_URL
+    # If running on Vercel or cloud mode, use the verified Supabase Cloud URL directly
+    if os.environ.get("VERCEL") or os.environ.get("USE_SUPABASE"):
+        return SUPABASE_CLOUD_DB_URL
+    return SUPABASE_CLOUD_DB_URL
 
 
 RAW_DB_URL = _get_valid_env_db_url()

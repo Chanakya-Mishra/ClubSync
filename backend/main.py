@@ -103,21 +103,27 @@ def init_db_and_defaults():
     global _db_initialized
     if _db_initialized:
         return
-    # Only run table creation & seeding on local SQLite. Supabase PostgreSQL is permanent and pre-seeded.
-    # This prevents running 100,000 PBKDF2 hash cycles and redundant DB queries on every Vercel cold start!
-    if DATABASE_URL.startswith("sqlite"):
-        Base.metadata.create_all(bind=engine)
-        db = SessionLocal()
-        try:
-            seed_database(db)
-        finally:
-            db.close()
-    _db_initialized = True
+    try:
+        # Only run table creation & seeding on local SQLite. Supabase PostgreSQL is permanent and pre-seeded.
+        if DATABASE_URL.startswith("sqlite"):
+            Base.metadata.create_all(bind=engine)
+            db = SessionLocal()
+            try:
+                seed_database(db)
+            finally:
+                db.close()
+    except Exception as e:
+        print(f"[DB Init Warning] {e}")
+    finally:
+        _db_initialized = True
 
 
 @app.on_event("startup")
 def on_startup():
-    init_db_and_defaults()
+    try:
+        init_db_and_defaults()
+    except Exception as e:
+        print(f"[Startup Warning] {e}")
 
 
 @app.get("/api/health")
