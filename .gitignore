@@ -9,5 +9,8 @@ data/*.db-wal
 data/uploads/*
 data/certificates/*
 .env
+.env.*
+.env*.local
+!.env.example
 .DS_Store
 .vercel/
