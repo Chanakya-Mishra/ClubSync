@@ -51,7 +51,8 @@ SUPABASE_STORAGE_BUCKET = os.environ.get("SUPABASE_STORAGE_BUCKET", "club-tracke
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
 # Cloud Supabase Database Pooler URL (Configured for project jmesfffyyzlhyjtdbipa in region ap-south-1)
-SUPABASE_CLOUD_DB_URL = "postgresql://postgres.jmesfffyyzlhyjtdbipa:cognix%40902008@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require"
+SUPABASE_CLOUD_DB_URL = "postgresql://postgres.jmesfffyyzlhyjtdbipa:Chanakya%40200817@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require"
+SUPABASE_FALLBACK_DB_URL = "postgresql://postgres.jmesfffyyzlhyjtdbipa:cognix%40902008@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require"
 DEFAULT_SQLITE_URL = f"sqlite:///{os.path.join(DATA_DIR, 'msot_club_tracker.db')}"
 
 
@@ -124,8 +125,19 @@ if DATABASE_URL.startswith("sqlite"):
         cursor.close()
 else:
     # Supabase PostgreSQL connection pool with connection reuse and health checks
+    _active_db_url = DATABASE_URL
+    if "Chanakya" in _active_db_url:
+        try:
+            import psycopg2
+            _test = psycopg2.connect(RAW_DB_URL, connect_timeout=3)
+            _test.close()
+        except Exception as _e:
+            _err = str(_e).lower()
+            if "password authentication failed" in _err or "circuitbreaker" in _err or "temporarily blocked" in _err:
+                _active_db_url = _clean_postgres_url(SUPABASE_FALLBACK_DB_URL)
+
     engine = create_engine(
-        DATABASE_URL,
+        _active_db_url,
         pool_size=5,
         max_overflow=10,
         pool_recycle=300,

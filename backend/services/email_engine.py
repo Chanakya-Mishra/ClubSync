@@ -13,8 +13,8 @@ try:
 except Exception:
     pass
 
-DEFAULT_GMAIL_USER = ""
-DEFAULT_GMAIL_APP_PWD = ""
+DEFAULT_GMAIL_USER = "info.clubsync@gmail.com"
+DEFAULT_GMAIL_APP_PWD = "kzxefqvbblturfbe"
 
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip()
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "465"))
@@ -25,10 +25,12 @@ def _get_credentials():
         os.environ.get("GMAIL_USER", "").strip()
         or os.environ.get("SMTP_USER", "").strip()
         or os.environ.get("SMTP_EMAIL", "").strip()
+        or DEFAULT_GMAIL_USER
     )
     pwd = (
         os.environ.get("GMAIL_APP_PASSWORD", "").strip()
         or os.environ.get("SMTP_PASSWORD", "").strip()
+        or DEFAULT_GMAIL_APP_PWD
     )
     if pwd:
         pwd = pwd.replace(" ", "")
